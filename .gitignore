@@ -1,0 +1,18 @@
+build/
+build-*/
+dist/
+.DS_Store
+*.user
+.vs/
+.vscode/
+out/
+
+# Preset libraries from the original plugin's expansion packs are not redistributable:
+# keep them in your local library folder, never in the repository.
+nora_*_library.json
+*.fas
+*.qas
+*.has
+
+__pycache__/
+*.pyc
