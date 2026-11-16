@@ -35,34 +35,17 @@ namespace mm
         return t + std::min (1.0, strength) * (nearestGridTick (t, g) - t);
     }
 
-    PlayPhrase makePlayPhrase (const Phrase& p, const Groove* g, double startStrength, double endStrength, bool link)
+    void quantizeNote (double& start, double& end, double length, const Groove* g, double startStrength, double endStrength, bool link)
     {
-        PlayPhrase pp;
-        pp.length = (double) p.lengthTicks();
         if (link)
             endStrength = startStrength;
-
-        for (auto& n : p.notes)
+        if (g != nullptr)
         {
-            PlayNote pn;
-            pn.number = n.number;
-            pn.noteOffset = n.noteOffset;
-            pn.vel = n.velocity;
-            pn.start = n.start;
-            pn.end = n.end;
-            if (g != nullptr)
-            {
-                pn.start = quantizeTick (pn.start, startStrength, *g);
-                pn.end = quantizeTick (pn.end, endStrength, *g);
-            }
-            pn.start = std::clamp (pn.start, 0.0, pp.length);
-            pn.end = std::min (pp.length, std::max (pn.end, pn.start + 1.0));
-            if (pn.start >= pp.length || pn.end <= pn.start)
-                continue;
-            pp.notes.push_back (pn);
+            start = quantizeTick (start, startStrength, *g);
+            end = quantizeTick (end, endStrength, *g);
         }
-        std::stable_sort (pp.notes.begin(), pp.notes.end(), [] (const PlayNote& a, const PlayNote& b) { return a.start < b.start; });
-        return pp;
+        start = std::clamp (start, 0.0, length);
+        end = std::min (length, std::max (end, start + 1.0));
     }
 
     //==============================================================================
@@ -70,15 +53,14 @@ namespace mm
     {
         for (auto& s : sounding)
         {
-            Event e = Event::off (time, s.number);
+            Event e = Event::off (time, s.id);
             e.fromPhrase = true;
-            e.noteOffset = s.noteOffset;
             out.push_back (e);
         }
         sounding.clear();
     }
 
-    void ClipPlayer::process (const PlayPhrase& pp, double startTick, double tps, int numSamples,
+    void ClipPlayer::process (const PlayClip& pp, double startTick, double tps, int numSamples,
                               int timeOffset, std::vector<Event>& out)
     {
         if (numSamples <= 0 || tps <= 0.0)
@@ -140,9 +122,8 @@ namespace mm
                 {
                     if (it != sounding.end())
                     {
-                        Event e = Event::off (time, n.number);
+                        Event e = Event::off (time, n.id);
                         e.fromPhrase = true;
-                        e.noteOffset = n.noteOffset;
                         out.push_back (e);
                         sounding.erase (it);
                     }
@@ -151,17 +132,15 @@ namespace mm
                 {
                     if (it != sounding.end())
                     {
-                        Event e = Event::off (time, n.number);
+                        Event e = Event::off (time, n.id);
                         e.fromPhrase = true;
-                        e.noteOffset = n.noteOffset;
                         out.push_back (e);
                         sounding.erase (it);
                     }
-                    Event e = Event::on (time, n.number, n.vel);
+                    Event e = Event::on (time, n.id, n.vel);
                     e.fromPhrase = true;
-                    e.noteOffset = n.noteOffset;
                     out.push_back (e);
-                    sounding.push_back ({ ev.index, n.number, n.noteOffset });
+                    sounding.push_back ({ ev.index, n.id });
                 }
             }
 

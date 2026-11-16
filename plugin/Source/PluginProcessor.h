@@ -4,15 +4,14 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "Parameters.h"
-#include "mm/Generators.h"
+#include "mm/ArpProcessor.h"
 #include "mm/Library.h"
-#include "mm/PhraseProcessor.h"
+#include "mm/Pattern.h"
 
 #include <array>
 #include <atomic>
 #include <optional>
 
-//==============================================================================
 /** Note events for the MIDI monitor (audio thread -> editor). */
 struct MonitorEvent
 {
@@ -22,7 +21,7 @@ struct MonitorEvent
 
 //==============================================================================
 class MelodyMagicProcessor : public juce::AudioProcessor,
-                             public juce::ChangeBroadcaster,   // model changed (phrase, groove, key map, library...)
+                             public juce::ChangeBroadcaster,   // pattern, groove, library... changed
                              private juce::Timer
 {
 public:
@@ -59,123 +58,84 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
     //==============================================================================
-    // Phrase (message thread)
-    const mm::Phrase& getPhrase() const noexcept           { return phrase; }
-    const juce::String& getPhraseSource() const noexcept   { return phraseSource; }
-
-    /** Replaces the phrase (undoable). */
-    void setPhrase (const mm::Phrase&, const juce::String& source, bool pushUndo = true);
-    /** Loads a phrase from the library or a file (undoable; ends any generator run). */
-    void loadPhrase (const mm::Phrase& p, const juce::String& source)   { lastGenerated = -1; setPhrase (p, source, true); }
-    /** Call before a series of editor changes (one undo step), then updatePhrase() as often as needed. */
-    void beginPhraseEdit();
-    void updatePhrase (const mm::Phrase&);
+    // Pattern (message thread). Every change is one undo step.
+    const mm::Pattern& getPattern() const noexcept          { return pattern; }
+    void setPattern (const mm::Pattern&);
+    /** Call once before a series of editor changes (one undo step), then updatePattern() as often as needed. */
+    void beginEdit();
+    void updatePattern (const mm::Pattern&);
 
     bool canUndo() const noexcept   { return ! undoStack.empty(); }
     bool canRedo() const noexcept   { return ! redoStack.empty(); }
     void undo();
     void redo();
 
-    bool loadPhraseFile (const juce::File&, juce::String& error);
-    bool savePhraseFile (const juce::File&);
+    // Generate (always in the Key + Scale)
+    void generateNewPattern();
+    void randomiseNotes();          // keeps the pattern, new notes from the scale
+    void shuffleFileNotes();        // keeps the pattern, moves the MIDI file's notes around
+    int numFileNotes() const noexcept               { return (int) fileNotes.size(); }
+    const juce::String& getFileName() const noexcept { return fileName; }
 
-    // Groove / key map / chord clip
+    /** Imports a MIDI file: its notes and rhythm become the pattern. */
+    bool importMidiFile (const juce::File&, juce::String& error);
+
+    // Groove
     void setGroove (std::optional<mm::Groove>, const juce::String& name);
     const std::optional<mm::Groove>& getGroove() const noexcept     { return groove; }
     const juce::String& getGrooveName() const noexcept              { return grooveName; }
 
-    void setKeyMap (std::optional<mm::KeyMap>, const juce::String& name);
-    const std::optional<mm::KeyMap>& getKeyMap() const noexcept     { return keyMap; }
-    const juce::String& getKeyMapName() const noexcept              { return keyMapName; }
-
-    void setChordClip (std::optional<mm::MidiClip>, const juce::String& name);
-    const std::optional<mm::MidiClip>& getChordClip() const noexcept { return chordClip; }
-    const juce::String& getChordClipName() const noexcept           { return chordClipName; }
-
     std::uint16_t getCustomMask() const noexcept    { return customMask.load(); }
     void setCustomMask (std::uint16_t);
 
-    /** The Scale Lock key and scale as they are set now. */
     mm::ScaleContext currentScale() const;
     int currentKey() const;
     int currentScaleIndex() const;
+    bool scaleLockOn() const;
 
-    //==============================================================================
-    // Generators
-    struct GenState
-    {
-        std::vector<int> values;
-        std::vector<bool> locks;
-        std::int64_t seed = 1;
-    };
-    GenState& generator (mm::gen::Kind k)               { return gens[(size_t) k]; }
-    void setGeneratorValue (mm::gen::Kind, int index, int value);   // re-runs the generator
-    void runGenerator (mm::gen::Kind, bool newSeed);
-    void run303Mutator (bool newSeed);
-    void randomizeGenerator (mm::gen::Kind);
-    void resetGenerator (mm::gen::Kind);
-    void takeSnapshot();
-    bool hasSnapshot() const noexcept                   { return snapshot.has_value(); }
-
-    //==============================================================================
-    // Drag MIDI export
-    int exportChords = mmp::kExportLastChord;
-    int exportBarsIndex = 3;   // 4 bars
-    /** Renders the arpeggiated pattern to a .mid file in the temp folder. */
+    /** Renders the arpeggiated pattern to a .mid file in the temp folder (Drag MIDI). */
     juce::File renderMidiFile();
-    juce::String describeExportChords() const;
 
-    //==============================================================================
     // Library
     std::shared_ptr<const mm::Library> getLibrary() const;
     juce::File getLibraryFolder() const                 { return libraryFolder; }
     void setLibraryFolder (const juce::File&);
     void rescanLibrary();
     bool isLibraryLoading() const noexcept              { return libraryLoading.load(); }
+    juce::String loadedLibraryKey;                      // highlighted in the library
 
     //==============================================================================
     // Editor state and live info
     std::atomic<int> editorWidth { 0 };
-    int activeTab = 0;
-    std::atomic<double> phrasePosition { -1.0 };   // ticks, -1 when not playing
-
-    /** Held chord as the arpeggiator sees it (audio thread writes, editor reads). */
+    std::atomic<double> playPosition { -1.0 };   // ticks, -1 when not playing
     std::vector<int> getHeldChord() const;
     int readMonitor (MonitorEvent* dest, int max);
 
 private:
     void timerCallback() override;
-    void rebuildPlayPhrase();
-    void publishKeyMap();
+    void rebuildPlayPattern();
     void pushUndo();
     void loadGlobalSettings();
     void saveGlobalSettings();
-    mm::CoreSettings readSettings() const;
+    mm::ArpSettings readSettings() const;
+    int param (const char* id) const;
 
     // model
-    mm::Phrase phrase;
-    juce::String phraseSource;
-    std::vector<mm::Phrase> undoStack, redoStack;
+    mm::Pattern pattern;
+    std::vector<mm::Pattern> undoStack, redoStack;
     std::optional<mm::Groove> groove;
     juce::String grooveName;
-    std::optional<mm::KeyMap> keyMap;
-    juce::String keyMapName;
-    std::optional<mm::MidiClip> chordClip;
-    juce::String chordClipName;
+    std::vector<int> fileNotes;   // offsets of the imported MIDI file's notes
+    juce::String fileName;
     std::atomic<std::uint16_t> customMask { 0x0fff };
-    std::array<GenState, mm::gen::kNumKinds> gens;
-    std::int64_t mutatorSeed = 1;
-    std::optional<mm::Phrase> snapshot;
-    int lastGenerated = -1;
     int lastQStart = -1, lastQEnd = -1, lastQLink = -1;
 
-    // live objects handed to the audio thread (std::atomic_load / atomic_store)
-    std::shared_ptr<const mm::PlayPhrase> livePhrase;
-    std::shared_ptr<const mm::KeyMap> liveKeyMap;
-    std::vector<std::shared_ptr<const void>> graveyard;   // freed on the message thread
+    // handed to the audio thread with std::atomic_load / atomic_store; old copies are freed here
+    std::shared_ptr<const mm::PlayPattern> livePattern;
+    std::vector<std::shared_ptr<const void>> graveyard;
 
     // audio thread
-    mm::PhraseProcessor core;
+    mm::ArpProcessor arp;
     mm::JuceLcg rng;
     std::vector<mm::Event> hostEvents, outEvents;
     juce::MidiBuffer otherMidi;
@@ -185,7 +145,6 @@ private:
     std::atomic<int> heldChordCount { 0 };
     std::array<std::atomic<int>, 16> lastChord {};
     std::atomic<int> lastChordCount { 0 };
-
     juce::AbstractFifo monitorFifo { 1024 };
     std::array<MonitorEvent, 1024> monitorBuffer {};
 

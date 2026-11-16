@@ -136,42 +136,4 @@ namespace mm
         return p;
     }
 
-    //==============================================================================
-    std::vector<int> computeScaleState (const std::vector<int>& sorted, const ScaleContext& sc)
-    {
-        std::vector<int> state;
-        if (sorted.empty())
-            return state;
-
-        const int p0 = sorted.front();
-        int last = p0 - 1;
-        for (int p : sorted)
-        {
-            if (p == last)
-                continue;
-            last = p;
-
-            const int delta = p - p0;
-            int count = 0;
-            for (int x = p0 + 1; x <= p0 + delta % 12; ++x)
-                if (sc.inScale (x))
-                    ++count;
-            state.push_back (sc.notesPerOctave * (delta / 12) + count);
-        }
-        return state;
-    }
-
-    int diatonicShift (int base, int offset, int k, const ScaleContext& sc) noexcept
-    {
-        const int n = std::max (1, sc.notesPerOctave);
-        const int s = sc.snap (base + offset, offset > 0);
-        int r = k % n, w = 0;
-        while (r > 0)
-        {
-            ++w;
-            if (sc.inScale (s + w))
-                --r;
-        }
-        return s + w + (k / n) * 12;
-    }
 }

@@ -42,13 +42,13 @@ jobs:
           fi
           exit $status
 
-      - name: Build unit tests and tools
+      - name: Build unit tests
         if: always() && steps.build.outcome == 'success'
         shell: bash
         run: |
           eval "$ANNOTATE"
           set +e
-          cmake --build build --config Release --target MelodyMagicTests phrasearp-render --parallel 2>&1 | tee tests-build.log
+          cmake --build build --config Release --target MelodyMagicTests --parallel 2>&1 | tee tests-build.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             { grep -iE "error|fatal" tests-build.log | sort -u | head -40 || true; } > summary.txt
@@ -84,8 +84,6 @@ jobs:
         run: |
           mkdir out
           (cd build/MelodyMagic_artefacts/Release/VST3 && 7z a -tzip "$GITHUB_WORKSPACE/out/MelodyMagic-VST3-Windows-x64.zip" "MelodyMagic.vst3" '-xr!*.pdb' > /dev/null)
-          cp build/Release/phrasearp-render.exe out/ 2>/dev/null || true
-          cp tools/diff_midi.py out/
           # debug symbols for reading crash dumps (kept out of the plugin zip)
           find build -iname "MelodyMagic*.pdb" -not -path "*/CMakeFiles/*" -exec 7z a -tzip "$GITHUB_WORKSPACE/out/MelodyMagic-VST3-Windows-x64-symbols.zip" {} + > /dev/null || true
           echo "${GITHUB_SHA}" > out/COMMIT.txt
@@ -103,6 +101,4 @@ jobs:
         with:
           name: MelodyMagic-Windows-x64
           retention-days: 14
-          path: |
-            build/MelodyMagic_artefacts/Release/VST3/
-            build/Release/phrasearp-render.exe
+          path: build/MelodyMagic_artefacts/Release/VST3/

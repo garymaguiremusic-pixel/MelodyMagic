@@ -1,5 +1,5 @@
 // Renders the editor to a PNG (docs/screenshot.png) without a host:
-//   MelodyMagicScreenshot <out.png> [libraryFolder] [tab 0..3] [scale]
+//   MelodyMagicScreenshot <out.png> [libraryFolder]
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -13,8 +13,6 @@ int main (int argc, char** argv)
     auto proc = std::make_unique<MelodyMagicProcessor>();
     if (argc > 2 && String (argv[2]).isNotEmpty())
         proc->setLibraryFolder (File::getCurrentWorkingDirectory().getChildFile (argv[2]));
-    if (argc > 3)
-        proc->activeTab = String (argv[3]).getIntValue();
 
     proc->setPlayConfigDetails (0, 2, 48000.0, 512);
     proc->prepareToPlay (48000.0, 512);
@@ -22,8 +20,7 @@ int main (int argc, char** argv)
     set (mmp::ParamIDs::scaleLock, 1.0f);
     set (mmp::ParamIDs::scaleIndex, 1.0f);   // Natural Minor
     set (mmp::ParamIDs::scaleKey, 9.0f);     // A
-    set (mmp::ParamIDs::internalSync, 1.0f);
-    set (mmp::ParamIDs::quantizeStart, 35.0f);
+    set (mmp::ParamIDs::arpMode, 2.0f);      // Up & Down
 
     // a held chord through the plugin, so the monitor and the playhead have something to show
     AudioBuffer<float> buffer (2, 512);
@@ -38,6 +35,7 @@ int main (int argc, char** argv)
     }
 
     MessageManager::getInstance()->runDispatchLoopUntil (1500);   // library loads in the background
+    proc->generateNewPattern();
     std::unique_ptr<AudioProcessorEditor> editor (proc->createEditor());
     editor->setSize (MelodyMagicPanel::kBaseWidth, MelodyMagicPanel::kBaseHeight);
     for (int i = 0; i < 20; ++i)
@@ -55,7 +53,7 @@ int main (int argc, char** argv)
     {
         MelodyMagicProcessor copy;
         copy.setStateInformation (state.getData(), (int) state.getSize());
-        const bool same = copy.getPhrase() == proc->getPhrase()
+        const bool same = copy.getPattern() == proc->getPattern()
                        && copy.apvts.getRawParameterValue (mmp::ParamIDs::scaleKey)->load() == 9.0f;
         std::printf ("state round trip: %s (%d bytes)\n", same ? "OK" : "MISMATCH", (int) state.getSize());
     }

@@ -1,5 +1,5 @@
 #include "LibraryPanel.h"
-#include "../FactoryPhrases.h"
+#include "../FactoryPatterns.h"
 #include "../Shared/CustomLookAndFeel.h"
 
 using namespace juce;
@@ -11,13 +11,12 @@ namespace
     String lastPart (const String& key)
     {
         auto name = key.fromLastOccurrenceOf ("/", false, false);
-        return name.upToLastOccurrenceOf (".", false, false).isNotEmpty() && name.containsChar ('.')
-                   ? name.upToLastOccurrenceOf (".", false, false) : name;
+        return name.containsChar ('.') ? name.upToLastOccurrenceOf (".", false, false) : name;
     }
 
     String folderOfKey (const String& key)   { return key.upToLastOccurrenceOf ("/", false, false); }
 
-    const char* categoryNames[] = { "Phrases", "Factory", "Grooves", "Key Maps", "Chord Clips" };
+    const char* categoryNames[] = { "Phrases", "Factory", "Grooves" };
 }
 
 //==============================================================================
@@ -27,15 +26,12 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     {
         auto& b = categoryButtons[(size_t) i];
         b.setButtonText (categoryNames[i]);
-        b.setClickingTogglesState (false);
         b.onClick = [this, i] { setCategory (i); };
         addAndMakeVisible (b);
     }
-    categoryButtons[Phrases].setTooltip ("Phrases from your library folder (.fas)");
-    categoryButtons[Factory].setTooltip ("Built-in phrases");
-    categoryButtons[Grooves].setTooltip ("Quantizer / groove patterns (.qas): set the strength with Q START / Q END");
-    categoryButtons[KeyMaps].setTooltip ("MIDI key maps (.has): each key you play becomes a chord (turn on KEY MAP)");
-    categoryButtons[Chords].setTooltip ("Chord clips (.mid): the chords Drag MIDI plays the phrase over (EXPORT CHORDS = Chord Clip)");
+    categoryButtons[Phrases].setTooltip ("Patterns from your library folder");
+    categoryButtons[Factory].setTooltip ("Built-in patterns");
+    categoryButtons[Grooves].setTooltip ("Groove patterns: set how strongly they pull the notes with Q Start / Q End");
 
     for (auto* list : { &folderList, &fileList })
     {
@@ -54,7 +50,9 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     searchBox.onTextChange = [this] { rebuildFiles(); };
     addAndMakeVisible (searchBox);
 
-    folderButton.setTooltip ("Choose the library folder: the folder holding nora_*_library.json and/or your .fas / .qas / .has / .mid files");
+    randomiseButton.setTooltip ("Keep the pattern's rhythm and pick new notes from the Key + Scale");
+    randomiseButton.onClick = [this] { proc.randomiseNotes(); };
+    folderButton.setTooltip ("Choose the library folder (nora_*_library.json and/or .fas / .qas files)");
     folderButton.onClick = [this]
     {
         chooser = std::make_unique<FileChooser> ("Library folder", proc.getLibraryFolder());
@@ -68,16 +66,12 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     };
     rescanButton.setTooltip ("Read the library folder again");
     rescanButton.onClick = [this] { proc.rescanLibrary(); };
-    unloadButton.onClick = [this]
-    {
-        if (category == Grooves)  proc.setGroove (std::nullopt, {});
-        if (category == KeyMaps)  proc.setKeyMap (std::nullopt, {});
-        if (category == Chords)   proc.setChordClip (std::nullopt, {});
-    };
-    for (auto* b : { &folderButton, &rescanButton, &unloadButton })
+    unloadButton.setTooltip ("Switch the groove off");
+    unloadButton.onClick = [this] { proc.setGroove (std::nullopt, {}); };
+    for (auto* b : { &randomiseButton, &folderButton, &rescanButton, &unloadButton })
         addAndMakeVisible (b);
 
-    setCategory (Phrases);
+    setCategory (Factory);
 }
 
 LibraryPanel::~LibraryPanel()
@@ -104,8 +98,7 @@ void LibraryPanel::setCategory (int c)
     category = c;
     for (int i = 0; i < NumCategories; ++i)
         categoryButtons[(size_t) i].setToggleState (i == c, dontSendNotification);
-    unloadButton.setVisible (c == Grooves || c == KeyMaps || c == Chords);
-    unloadButton.setTooltip (c == Grooves ? "No groove" : (c == KeyMaps ? "No key map" : "No chord clip"));
+    unloadButton.setVisible (c == Grooves);
     selectedFolder = {};
     lib = proc.getLibrary();
     rebuildKeys();
@@ -117,20 +110,15 @@ void LibraryPanel::rebuildKeys()
     allKeys.clear();
     if (category == Factory)
     {
-        for (auto& [key, ph] : mmp::factoryPhrases())
-            allKeys.push_back (String (key));
+        for (auto& kv : mmp::factoryPatterns())
+            allKeys.push_back (String (kv.first));
     }
     else if (lib != nullptr)
     {
-        auto addAll = [this] (const auto& map) { for (auto& kv : map) allKeys.push_back (String::fromUTF8 (kv.first.c_str())); };
-        switch (category)
-        {
-            case Phrases: addAll (lib->phrases); break;
-            case Grooves: addAll (lib->grooves); break;
-            case KeyMaps: addAll (lib->keyMaps); break;
-            case Chords:  addAll (lib->clips); break;
-            default: break;
-        }
+        if (category == Phrases)
+            for (auto& kv : lib->phrases) allKeys.push_back (String::fromUTF8 (kv.first.c_str()));
+        else
+            for (auto& kv : lib->grooves) allKeys.push_back (String::fromUTF8 (kv.first.c_str()));
     }
 
     folders.clear();
@@ -175,17 +163,9 @@ void LibraryPanel::rebuildFiles()
     repaint();
 }
 
-String LibraryPanel::currentKeyFor (int c) const
+String LibraryPanel::currentKey() const
 {
-    switch (c)
-    {
-        case Phrases:
-        case Factory: return proc.getPhraseSource();
-        case Grooves: return proc.getGrooveName();
-        case KeyMaps: return proc.getKeyMapName();
-        case Chords:  return proc.getChordClipName();
-        default:      return {};
-    }
+    return category == Grooves ? proc.getGrooveName() : proc.loadedLibraryKey;
 }
 
 void LibraryPanel::loadEntry (int row)
@@ -197,35 +177,24 @@ void LibraryPanel::loadEntry (int row)
 
     if (category == Factory)
     {
-        proc.loadPhrase (mmp::factoryPhrases().at (k), key);
+        proc.loadedLibraryKey = key;
+        proc.setPattern (mmp::factoryPatterns().at (k));
         return;
     }
     if (lib == nullptr)
         return;
 
-    switch (category)
+    if (category == Phrases)
     {
-        case Phrases:
-            if (auto it = lib->phrases.find (k); it != lib->phrases.end())
-                proc.loadPhrase (it->second, key);
-            break;
-        case Grooves:
-            if (auto it = lib->grooves.find (k); it != lib->grooves.end())
-                proc.setGroove (it->second, key);
-            break;
-        case KeyMaps:
-            if (auto it = lib->keyMaps.find (k); it != lib->keyMaps.end())
-            {
-                proc.setKeyMap (it->second, key);
-                if (auto* param = proc.apvts.getParameter (mmp::ParamIDs::keyMapEnabled))
-                    param->setValueNotifyingHost (1.0f);
-            }
-            break;
-        case Chords:
-            if (auto it = lib->clips.find (k); it != lib->clips.end())
-                proc.setChordClip (it->second, key);
-            break;
-        default: break;
+        if (auto it = lib->phrases.find (k); it != lib->phrases.end())
+        {
+            proc.loadedLibraryKey = key;
+            proc.setPattern (mm::patternFromPhrase (it->second));
+        }
+    }
+    else if (auto it = lib->grooves.find (k); it != lib->grooves.end())
+    {
+        proc.setGroove (it->second, key);
     }
 }
 
@@ -242,9 +211,8 @@ void LibraryPanel::FolderModel::paintListBoxItem (int row, Graphics& g, int w, i
         g.fillRect (0, 0, w, h);
     }
     auto text = owner.folders[(size_t) row];
-    // drop the common prefix ("Phrases/kick101/") so the useful part fits
-    if (text != "All")
-        text = text.fromFirstOccurrenceOf ("/", false, false).isNotEmpty() ? text.fromFirstOccurrenceOf ("/", false, false) : text;
+    if (text != "All" && text.containsChar ('/'))
+        text = text.fromFirstOccurrenceOf ("/", false, false);   // drop the common top folder
     g.setFont (CustomLookAndFeel::uiFont (12.0f, row == 0));
     g.setColour (selected ? Colours::white : Colour (0xffdfe3e6));
     g.drawFittedText (text, 6, 0, w - 8, h, Justification::centredLeft, 1, 0.8f);
@@ -265,7 +233,7 @@ void LibraryPanel::FileModel::paintListBoxItem (int row, Graphics& g, int w, int
     if (row < 0 || row >= (int) owner.files.size())
         return;
     const auto& key = owner.files[(size_t) row];
-    const bool loaded = key == owner.currentKeyFor (owner.category);
+    const bool loaded = key == owner.currentKey();
     if (selected)
     {
         g.setColour (Colour (0xff2a6fb8).withAlpha (0.8f));
@@ -305,9 +273,9 @@ void LibraryPanel::paint (Graphics& g)
     if (proc.isLibraryLoading())
         status = "Loading library...";
     else if (category != Factory && allKeys.empty())
-        status = "Empty. Click Folder... and choose the folder with nora_*_library.json or your preset files.";
+        status = "Empty: click Folder... and choose the folder holding nora_*_library.json (or .fas / .qas files)";
     else
-        status = String ((int) files.size()) + " of " + String ((int) allKeys.size()) + "   |   " + proc.getLibraryFolder().getFullPathName();
+        status = String ((int) files.size()) + " of " + String ((int) allKeys.size());
 
     g.setFont (CustomLookAndFeel::uiFont (10.0f));
     g.setColour (VirusColours::labelText.withAlpha (0.8f));
@@ -319,21 +287,24 @@ void LibraryPanel::resized()
     auto area = getLocalBounds().withTrimmedTop ((int) kHeaderH + 6).reduced (8, 0).withTrimmedBottom (18);
 
     auto top = area.removeFromTop (22);
-    const int bw = 82;
     for (auto& b : categoryButtons)
     {
-        b.setBounds (top.removeFromLeft (bw));
+        b.setBounds (top.removeFromLeft (78));
         top.removeFromLeft (4);
     }
-    rescanButton.setBounds (top.removeFromRight (62));
+    rescanButton.setBounds (top.removeFromRight (60));
     top.removeFromRight (4);
-    folderButton.setBounds (top.removeFromRight (72));
+    folderButton.setBounds (top.removeFromRight (70));
     top.removeFromRight (4);
     if (unloadButton.isVisible())
-        unloadButton.setBounds (top.removeFromRight (62));
+    {
+        unloadButton.setBounds (top.removeFromRight (78));
+        top.removeFromRight (4);
+    }
+    randomiseButton.setBounds (top.removeFromRight (128));
 
     area.removeFromTop (6);
-    auto left = area.removeFromLeft (220);
+    auto left = area.removeFromLeft (200);
     folderList.setBounds (left.reduced (2));
     area.removeFromLeft (8);
     searchBox.setBounds (area.removeFromTop (20).reduced (2, 0));

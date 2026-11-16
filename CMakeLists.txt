@@ -11,7 +11,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 option(MELODYMAGIC_BUILD_PLUGIN      "Build the VST3 plugin (downloads JUCE)"                      ON)
 option(MELODYMAGIC_BUILD_STANDALONE  "Also build a standalone app for testing"                     OFF)
 option(MELODYMAGIC_BUILD_TESTS       "Build the core unit tests (downloads Catch2)"                ON)
-option(MELODYMAGIC_BUILD_TOOLS       "Build phrasearp-render (offline renderer for A/B tests)"     ON)
 option(MELODYMAGIC_COPY_AFTER_BUILD  "Install the plugin into the user plugin folder after building" OFF)
 option(MELODYMAGIC_BUILD_SCREENSHOT  "Build a tool that renders the editor to a PNG (docs/screenshot.png)" OFF)
 set(JUCE_DIR "" CACHE PATH "Path to a local JUCE checkout (leave empty to download JUCE 8.0.4)")
@@ -21,17 +20,15 @@ if(MSVC)
 endif()
 
 # ------------------------------------------------------------------------------
-# Core: all musical logic, no JUCE (shared by the plugin, the tests and the CLI)
+# Core: all musical logic, no JUCE (shared by the plugin and the tests)
 add_library(mmcore STATIC
-    core/src/ArpEngine.cpp
+    core/src/ArpProcessor.cpp
     core/src/ClipPlayer.cpp
     core/src/Formats.cpp
-    core/src/Generators.cpp
     core/src/Json.cpp
     core/src/Library.cpp
     core/src/MidiFile.cpp
-    core/src/PhraseProcessor.cpp
-    core/src/Progressions.cpp
+    core/src/Pattern.cpp
     core/src/Scales.cpp
     core/src/ValueTreeCodec.cpp)
 target_include_directories(mmcore PUBLIC core/include)
@@ -40,14 +37,6 @@ if(MSVC)
     target_compile_options(mmcore PRIVATE /W4 /wd4244 /wd4267)
 else()
     target_compile_options(mmcore PRIVATE -Wall -Wextra -Wno-sign-compare)
-endif()
-
-# ------------------------------------------------------------------------------
-# Tools
-if(MELODYMAGIC_BUILD_TOOLS)
-    add_executable(phrasearp-render tools/render_main.cpp)
-    target_link_libraries(phrasearp-render PRIVATE mmcore)
-    set_target_properties(phrasearp-render PROPERTIES FOLDER Tools)
 endif()
 
 # ------------------------------------------------------------------------------
@@ -117,12 +106,11 @@ if(MELODYMAGIC_BUILD_PLUGIN)
     set(MELODYMAGIC_PLUGIN_SOURCES
         plugin/Source/PluginProcessor.cpp
         plugin/Source/PluginEditor.cpp
-        plugin/Source/FactoryPhrases.cpp
+        plugin/Source/FactoryPatterns.cpp
         plugin/Source/Shared/CustomLookAndFeel.cpp
         plugin/Source/Shared/VirusComponents.cpp
-        plugin/Source/UI/PhraseGrid.cpp
+        plugin/Source/UI/PatternGrid.cpp
         plugin/Source/UI/LibraryPanel.cpp
-        plugin/Source/UI/GeneratorPanel.cpp
         plugin/Source/UI/MidiMonitor.cpp
         plugin/Source/UI/DragMidiHandle.cpp)
     set(MELODYMAGIC_DEFINITIONS

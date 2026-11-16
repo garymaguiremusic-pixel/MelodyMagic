@@ -1,13 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "mm/Progressions.h"
 #include "mm/Scales.h"
 
 using namespace mm;
 
 namespace
 {
-    // Original table (1 = in scale, C..B) from ANALYSIS.md 3.8
+    // Reference table (1 = in scale, C..B)
     std::uint16_t fromString (const char* bits)
     {
         std::uint16_t m = 0;
@@ -18,7 +17,7 @@ namespace
     }
 }
 
-TEST_CASE ("Scale masks match the original plugin's table", "[scales]")
+TEST_CASE ("Scale masks", "[scales]")
 {
     CHECK (scaleMask (Chromatic)        == fromString ("111111111111"));
     CHECK (scaleMask (Major)            == fromString ("101011010101"));
@@ -74,18 +73,8 @@ TEST_CASE ("SnapToScale with the original's clamps", "[scales]")
     CHECK (c.snap (-5, false) == 0);        // below 0: lowest in-scale pc
     CHECK (c.snap (125, true) == 108 + 11); // above 119: 108 + highest in-scale pc
 
-    const auto fs = ScaleContext::make (Major, 6);   // F# major: no C, B is the highest pc... (A#, B)
+    const auto fs = ScaleContext::make (Major, 6);   // F# major has no C: snapping C down goes below 0
     CHECK (fs.snap (0, false) == fs.lowestPc);
-}
-
-TEST_CASE ("Scale state counts scale steps from the bass", "[scales]")
-{
-    const auto c = ScaleContext::make (Major, 0);
-    CHECK (computeScaleState ({ 60, 64, 67 }, c) == std::vector<int> { 0, 2, 4 });
-    CHECK (computeScaleState ({ 60, 64, 67, 72 }, c) == std::vector<int> { 0, 2, 4, 7 });
-    CHECK (computeScaleState ({ 60, 60, 64 }, c) == std::vector<int> { 0, 2 });
-    CHECK (computeScaleState ({ 48, 76 }, c) == std::vector<int> { 0, 7 * 2 + 2 });
-    CHECK (computeScaleState ({}, c).empty());
 }
 
 TEST_CASE ("Scale Lock quantise: nearest, ties go down", "[scales][scalelock]")
@@ -99,20 +88,4 @@ TEST_CASE ("Scale Lock quantise: nearest, ties go down", "[scales][scalelock]")
     const auto wt = ScaleContext::make (WholeTone, 0);
     CHECK (wt.quantise (61) == 60);
     CHECK (wt.quantise (127) == 126);
-}
-
-TEST_CASE ("Diatonic chords for MIDI export", "[scales][export]")
-{
-    const auto c = ScaleContext::make (Major, 0);
-    CHECK (diatonicChord (c, 60, 0, 3) == std::vector<int> { 60, 64, 67 });
-    CHECK (diatonicChord (c, 60, 5, 3) == std::vector<int> { 69, 72, 76 });   // vi = A minor
-    CHECK (diatonicChord (c, 60, 4, 4) == std::vector<int> { 67, 71, 74, 77 }); // V7
-
-    const auto a = ScaleContext::make (NaturalMinor, 9);
-    CHECK (diatonicChord (a, 57, 0, 3) == std::vector<int> { 57, 60, 64 });
-
-    const auto prog = buildProgression (1, c, 60, 4, 3);
-    REQUIRE (prog.size() == 12);
-    CHECK (prog[3].note == 67);       // bar 2: V = G B D
-    CHECK (prog[3].start == 384.0);
 }

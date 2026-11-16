@@ -5,10 +5,9 @@
 #include "Shared/CustomLookAndFeel.h"
 #include "Shared/VirusComponents.h"
 #include "UI/DragMidiHandle.h"
-#include "UI/GeneratorPanel.h"
 #include "UI/LibraryPanel.h"
 #include "UI/MidiMonitor.h"
-#include "UI/PhraseGrid.h"
+#include "UI/PatternGrid.h"
 
 //==============================================================================
 /** The whole user interface, laid out at its base size (1000 x 680). The editor
@@ -33,12 +32,11 @@ private:
     void setupCombo (juce::ComboBox&, const juce::StringArray& items, const juce::String& tooltip);
     void attachCombo (juce::ComboBox&, const char* paramId);
     void attachToggle (juce::TextButton&, const char* paramId, const juce::String& tooltip);
-    void attachKnob (VirusKnob&, const char* paramId, std::function<juce::String (double)> describe);
-    void setTab (int);
+    void attachKnob (VirusKnob&, const char* paramId, std::function<juce::String (double)> describe, const juce::String& tooltip);
     void updateFromModel();
     void updateSelectionInfo();
     void updateCustomKeys();
-    void editPhrase (const std::function<void (mm::Phrase&)>&);
+    void importMidi (const juce::File&);
     void createBackground();
     void drawWordmark (juce::Graphics&, juce::Rectangle<float> area);
 
@@ -47,24 +45,18 @@ private:
     juce::Image background;
 
     // Top bar
-    juce::TextButton undoButton { "Undo" }, redoButton { "Redo" }, loadButton { "Load" }, saveButton { "Save" }, bypassButton { "Bypass" };
+    juce::TextButton undoButton { "Undo" }, redoButton { "Redo" }, importButton { "Import MIDI" }, bypassButton { "Bypass" };
     DragMidiHandle dragHandle;
 
-    // Phrase panel
-    juce::ComboBox lanesBox, rowsBox, lengthBox, snapBox;
-    juce::TextButton offsetDown { "-" }, offsetUp { "+" }, clearButton { "Clear" };
+    // Pattern
+    juce::ComboBox lengthBox, snapBox;
     LcdDisplay selectionLcd;
-    PhraseGrid grid;
-
-    // Tabs: generators and library
-    std::array<juce::TextButton, 4> tabs;
-    GeneratorPanel generatorPanel;
+    juce::TextButton clearButton { "Clear" };
+    PatternGrid grid;
     LibraryPanel libraryPanel;
-    int currentTab = -1;
 
     // Arp
     juce::ComboBox modeBox, speedBox;
-    juce::TextButton syncButton { "Int Sync" }, ignoreVelButton { "Fixed Vel" };
     VirusKnob randomVelKnob { VirusKnob::Size::Small, "Rnd Vel" };
 
     // Scale lock
@@ -72,20 +64,17 @@ private:
     juce::TextButton scaleLockButton { "Scale Lock" };
     std::array<juce::TextButton, 12> customKeys;
 
+    // Generate
+    VirusKnob densityKnob { VirusKnob::Size::Small, "Density" };
+    VirusKnob rangeKnob   { VirusKnob::Size::Small, "Range" };
+    VirusKnob gateKnob    { VirusKnob::Size::Small, "Gate" };
+    juce::TextButton newPatternButton { "New Pattern" }, randomiseButton { "Randomise Notes" }, shuffleButton { "Shuffle File Notes" };
+
     // Groove
     LcdDisplay grooveLcd;
     VirusKnob qStartKnob { VirusKnob::Size::Small, "Q Start" };
     VirusKnob qEndKnob   { VirusKnob::Size::Small, "Q End" };
     juce::TextButton qLinkButton { "Link" };
-
-    // MIDI
-    juce::ComboBox inChannelBox, outChannelBox;
-    juce::TextButton keyMapButton { "Key Map" };
-    LcdDisplay keyMapLcd;
-
-    // Export (Drag MIDI)
-    juce::ComboBox exportChordsBox, exportBarsBox;
-    LcdDisplay exportLcd;
 
     MidiMonitor monitor;
     HelpButton helpButton;
@@ -100,8 +89,7 @@ private:
     std::vector<std::unique_ptr<KnobAttachment>> knobAttachments;
     std::vector<std::unique_ptr<ButtonAttachment>> buttonAttachments;
 
-    juce::Rectangle<float> phrasePanel, arpPanel, scalePanel, groovePanel, midiPanel, exportPanel;
-    int lastScaleIndex = -1;
+    int lastScaleIndex = -1, lastKey = -1, lastLock = -1;
     bool updating = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MelodyMagicPanel)

@@ -5,9 +5,9 @@
 
 //==============================================================================
 /**
-    Preset browser: phrases (library + factory), grooves, key maps and chord clips,
-    listed by folder. A single click loads the entry. The library folder can hold the
-    pre-converted nora_*_library.json files and/or raw .fas / .qas / .has / .mid files.
+    Pattern browser: library phrases, factory patterns and grooves, listed by folder.
+    A single click loads the entry. "Randomise Notes" keeps the loaded pattern's rhythm
+    and picks new notes from the Key + Scale.
 */
 class LibraryPanel : public juce::Component
 {
@@ -15,14 +15,12 @@ public:
     explicit LibraryPanel (MelodyMagicProcessor&);
     ~LibraryPanel() override;
 
-    /** Library or loaded items changed. */
     void refresh();
-
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    enum Category { Phrases = 0, Factory, Grooves, KeyMaps, Chords, NumCategories };
+    enum Category { Phrases = 0, Factory, Grooves, NumCategories };
 
     struct FolderModel : juce::ListBoxModel
     {
@@ -48,10 +46,10 @@ private:
     void rebuildKeys();
     void rebuildFiles();
     void loadEntry (int row);
-    juce::String currentKeyFor (int category) const;
+    juce::String currentKey() const;
 
     MelodyMagicProcessor& proc;
-    int category = Phrases;
+    int category = Factory;
     std::vector<juce::String> allKeys, folders, files;
     juce::String selectedFolder;
     std::shared_ptr<const mm::Library> lib;
@@ -61,7 +59,6 @@ private:
     FileModel fileModel { *this };
     juce::ListBox folderList { "folders", &folderModel }, fileList { "files", &fileModel };
     juce::TextEditor searchBox;
-    juce::TextButton folderButton { "Folder..." }, rescanButton { "Rescan" }, unloadButton { "Unload" };
+    juce::TextButton randomiseButton { "Randomise Notes" }, folderButton { "Folder..." }, rescanButton { "Rescan" }, unloadButton { "No Groove" };
     std::unique_ptr<juce::FileChooser> chooser;
-    bool loadingFromList = false;
 };

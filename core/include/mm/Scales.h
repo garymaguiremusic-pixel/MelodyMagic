@@ -8,10 +8,8 @@
 namespace mm
 {
     /**
-        Scale list. The first 16 match ArpSampler (same names, same order). Persian and
-        Chromatic complete the original plugin's set (its Diatonic / Ionian / Aeolian /
-        Spanish Gypsy entries are aliases of scales already listed). Custom uses a user
-        mask and ignores the key.
+        Scale list. The first 16 match ArpSampler (same names, same order), then Persian,
+        Chromatic and Custom (a user mask that ignores the key).
     */
     enum ScaleIndex
     {
@@ -36,7 +34,7 @@ namespace mm
     struct ScaleContext
     {
         std::array<bool, 12> in {};   // absolute pitch classes (C = 0)
-        int notesPerOctave = 12;      // N
+        int notesPerOctave = 12;
         std::array<int, 12> up {};    // nearest in-scale pitch >= pc (may be >= 12)
         std::array<int, 12> down {};  // nearest in-scale pitch <= pc (may be < 0)
         int lowestPc = 0, highestPc = 11;
@@ -47,8 +45,8 @@ namespace mm
 
         bool inScale (int pitch) const noexcept   { return in[(size_t) floorMod (pitch, 12)]; }
 
-        /** Original SnapToScale: nearest in-scale pitch at/above (up) or at/below (down),
-            with the original's clamps (< 0 -> lowest pc, > 119 -> 108 + highest pc). */
+        /** Nearest in-scale pitch at/above (up) or at/below (down); results below 0 give the
+            lowest in-scale pitch class, above 119 give 108 + the highest. */
         int snap (int pitch, bool upwards) const noexcept;
 
         /** Scale Lock: nearest in-scale note (ties go down), kept within 0..127. */
@@ -58,17 +56,4 @@ namespace mm
         int stepsAbove (int root, int steps) const noexcept;
     };
 
-    /**
-        Per unique chord pitch p0 < p1 < ...: state[0] = 0 and
-        state[i] = N * ((pi - p0) / 12) + |{ x in (p0, p0 + (pi - p0) % 12] : inScale(x) }|.
-        'sortedPitches' may contain duplicates; they are skipped.
-    */
-    std::vector<int> computeScaleState (const std::vector<int>& sortedPitches, const ScaleContext&);
-
-    /**
-        Diatonic Note_Offset (original FUN_1800040e0): move the bass by 'offset' semitones
-        (snapped into the scale in the offset's direction), then rebuild the chord shape
-        diatonically: k = state[row] scale steps above that new root.
-    */
-    int diatonicShift (int bassPlusOctave, int offset, int k, const ScaleContext&) noexcept;
 }
