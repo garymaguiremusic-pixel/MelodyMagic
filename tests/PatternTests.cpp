@@ -273,3 +273,65 @@ TEST_CASE ("Library phrases become patterns", "[import]")
     CHECK (p.notes[2].offset == -12);
     CHECK (p.notes[1].velocity == 90);
 }
+
+TEST_CASE ("Auto Play: plays the key's root with no MIDI note, only while the host plays", "[arp][auto]")
+{
+    auto s = settings (ArpOrder::Melody);
+    s.key = 7;   // G
+    const auto p = steps ({ 0, 3, 7 });
+    CHECK (render (p, {}, s).empty());          // off: nothing without a note
+    s.autoPlay = true;
+    CHECK (pitches (render (p, {}, s)) == std::vector<int> { 67, 70, 74 });   // from G3
+    s.order = ArpOrder::Up;
+    CHECK (pitches (render (p, {}, s)) == std::vector<int> { 67, 70, 74 });
+
+    // stopped host: silent even with Auto Play
+    ArpProcessor proc;
+    const auto pp = makePlayPattern (p, nullptr, 0, 0, false);
+    TransportInfo t;
+    t.sampleRate = 48000;
+    std::vector<Event> out;
+    for (int i = 0; i < 20; ++i)
+        proc.process (t, 512, s, &pp, {}, out);
+    CHECK (out.empty());
+
+    // a played key takes over from the ghost note
+    s.order = ArpOrder::Up;
+    CHECK (pitches (render (p, { 50 }, s)) == std::vector<int> { 50, 53, 57 });
+}
+
+TEST_CASE ("Changing the length copies the pattern into the new bars", "[edit]")
+{
+    Pattern p;
+    p.notes = { { 0, 24, 0, 100 }, { 96, 120, 3, 90 }, { 360, 400, 7, 80 } };   // the last note crosses the bar line
+    auto two = p;
+    resizePattern (two, 2);
+    CHECK (two.bars == 2);
+    REQUIRE (two.notes.size() == 6);
+    CHECK ((two.notes[3].start == 384 && two.notes[3].offset == 0));
+    CHECK ((two.notes[4].start == 480 && two.notes[4].offset == 3 && two.notes[4].velocity == 90));
+    CHECK ((two.notes[5].start == 744 && two.notes[5].end == 768));   // cut at the new end
+
+    auto four = two;
+    resizePattern (four, 4);
+    CHECK (four.notes.size() == 12);
+    CHECK (four.notes[6].start == 768);
+
+    auto back = four;
+    resizePattern (back, 1);
+    CHECK (back.notes.size() == 3);
+    CHECK (back.notes[2].end == 384);
+}
+
+TEST_CASE ("Library phrase rows become chord notes of the key", "[import]")
+{
+    Phrase ph;
+    ph.notes = { { 50, 0, 100, 0, 24 }, { 51, 0, 100, 0, 24 }, { 52, 0, 100, 0, 24 }, { 61, 0, 90, 96, 120 } };
+    const auto am = ScaleContext::make (NaturalMinor, 9);
+    const auto p = patternFromPhrase (ph, &am, 9);
+    REQUIRE (p.notes.size() == 4);
+    CHECK (p.notes[0].offset == 0);    // A
+    CHECK (p.notes[1].offset == 3);    // C
+    CHECK (p.notes[2].offset == 7);    // E
+    CHECK (p.notes[3].offset == 15);   // C an octave up
+}

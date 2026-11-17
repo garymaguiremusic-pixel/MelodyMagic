@@ -96,6 +96,7 @@ mm::ArpSettings MelodyMagicProcessor::readSettings() const
     s.scaleLock = scaleLockOn();
     s.scale = currentScale();
     s.key = currentKey();
+    s.autoPlay = param (mmp::ParamIDs::autoPlay) != 0;
     s.bypassed = param (mmp::ParamIDs::bypassed) != 0;
     return s;
 }
@@ -318,7 +319,8 @@ void MelodyMagicProcessor::newMelody()
     if (p.notes.empty())
         p = mm::makeMelody (p.bars, melodySettings(), melodyStyle(), currentScale(), currentKey(), r);
     else
-        mm::melodiseNotes (p, melodySettings(), melodyStyle(), currentScale(), currentKey(), r);   // same rhythm
+        mm::melodiseNotes (p, melodySettings(), melodyStyle(), currentScale(), currentKey(), r,   // same rhythm
+                           false, param (mmp::ParamIDs::genTopOnly) != 0);
     switchToMelodyMode();
     setPattern (p);
 }

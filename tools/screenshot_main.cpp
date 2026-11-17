@@ -79,7 +79,8 @@ int main (int argc, char** argv)
         if (auto lib = proc->getLibrary(); lib != nullptr && ! lib->phrases.empty())
         {
             const auto& phrase = lib->phrases.at ("Phrases/kick101/Pluck_Stab/133.fas");
-            proc->setPattern (mm::patternFromPhrase (phrase));
+            const auto sc = proc->currentScale();
+            proc->setPattern (mm::patternFromPhrase (phrase, &sc, proc->currentKey()));
             const auto before = proc->getPattern();
             bool same = true;
             for (int i = 0; i < 5; ++i)
@@ -88,6 +89,27 @@ int main (int argc, char** argv)
                 same = same && rhythmOf (proc->getPattern()) == rhythmOf (before);
             }
             std::printf ("phrase + New Melody x5: pattern %s (%d notes)\n", same ? "UNCHANGED" : "CHANGED", (int) before.notes.size());
+
+            // register: New Melody stays from the pattern's lowest note up
+            int loBefore = 100, loAfter = 100, hiAfter = -100;
+            for (auto& n : before.notes) loBefore = jmin (loBefore, n.offset);
+            for (auto& n : proc->getPattern().notes) { loAfter = jmin (loAfter, n.offset); hiAfter = jmax (hiAfter, n.offset); }
+            std::printf ("register: pattern lowest %d, new melody %d..%d\n", loBefore, loAfter, hiAfter);
+
+            // top notes only: the bottom notes stay
+            proc->setPattern (before);
+            if (auto* tp = proc->apvts.getParameter (mmp::ParamIDs::genTopOnly)) tp->setValueNotifyingHost (1.0f);
+            proc->newMelody();
+            int keptBottom = 0, bottoms = 0;
+            for (size_t i = 0; i < before.notes.size(); ++i)
+                if (before.notes[i].offset == loBefore)
+                {
+                    ++bottoms;
+                    for (auto& n : proc->getPattern().notes)
+                        if (n.start == before.notes[i].start && n.offset == loBefore) { ++keptBottom; break; }
+                }
+            std::printf ("top notes only: %d of %d bottom notes kept\n", keptBottom, bottoms);
+            if (auto* tp = proc->apvts.getParameter (mmp::ParamIDs::genTopOnly)) tp->setValueNotifyingHost (0.0f);
 
             // 2. New Pattern: the notes (each onset's chord) stay in order, the rhythm changes
             auto onsets = [] (const mm::Pattern& p)

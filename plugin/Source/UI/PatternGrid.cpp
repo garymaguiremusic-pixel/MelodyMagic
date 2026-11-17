@@ -5,8 +5,8 @@ using namespace juce;
 
 PatternGrid::PatternGrid (MelodyMagicProcessor& p) : proc (p)
 {
-    setTooltip ("Click: add a note.  Drag: move.  Drag the right edge: length.  Alt: no snap.\n"
-                "Mouse wheel over a note: up / down a semitone (a scale note with Scale Lock on).\n"
+    setTooltip ("Click: add a note (locked to the Key + Scale).  Drag: move.  Drag the right edge: length.  Alt: no snap, any semitone.\n"
+                "Mouse wheel over a note: up / down to the next scale note (Alt: a semitone).\n"
                 "Right-click or double-click: delete.  Drop a .mid file here to import it.\n"
                 "Keys: Up / Down move the selected note, Left / Right select, Delete removes it.");
     setWantsKeyboardFocus (true);
@@ -50,6 +50,14 @@ double PatternGrid::tickForX (float x) const noexcept
 {
     return (double) (x - gridArea.getX()) / jmax (1.0f, gridArea.getWidth()) * length;
 }
+int PatternGrid::snapToKey (int offset) const
+{
+    // the nearest note of the Key + Scale (ties go down)
+    const auto scale = proc.currentScale();
+    const int root = 60 + proc.currentKey();
+    return jlimit (-mm::kMaxOffset, mm::kMaxOffset, scale.quantise (root + offset) - root);
+}
+
 int PatternGrid::offsetForY (float y) const noexcept
 {
     return jlimit (bottom, top, top - (int) ((y - gridArea.getY()) / rowHeight()));
@@ -301,7 +309,7 @@ void PatternGrid::mouseDown (const MouseEvent& e)
         mm::PatternNote n;
         n.start = jlimit (0, jmax (0, length - 1), e.mods.isAltDown() ? (int) t : (int) (t / snap) * snap);
         n.end = jmax (n.start + 1, jmin (length, n.start + snap));
-        n.offset = offsetForY (e.position.y);
+        n.offset = e.mods.isAltDown() ? offsetForY (e.position.y) : snapToKey (offsetForY (e.position.y));
         n.velocity = selected >= 0 && selected < (int) p.notes.size() ? p.notes[(size_t) selected].velocity : 100;
         p.notes.push_back (n);
         selected = selectAfterSort (p, n);
@@ -341,6 +349,8 @@ void PatternGrid::mouseDrag (const MouseEvent& e)
         n.start = jlimit (0, jmax (0, length - len), dragOriginal.start + (int) delta);
         n.end = n.start + len;
         n.offset = jlimit (-mm::kMaxOffset, mm::kMaxOffset, dragOriginal.offset + offsetForY (e.position.y) - dragStartOffset);
+        if (! fine)
+            n.offset = snapToKey (n.offset);
     }
     else
     {
@@ -395,17 +405,17 @@ void PatternGrid::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& 
     if (std::abs (dir) < 1.0e-6f)
         return;
     selected = i;
-    moveSelected (dir > 0.0f ? 1 : -1);
+    moveSelected (dir > 0.0f ? 1 : -1, e.mods.isAltDown());
 }
 
-void PatternGrid::moveSelected (int direction)
+void PatternGrid::moveSelected (int direction, bool chromatic)
 {
     auto p = proc.getPattern();
     if (selected < 0 || selected >= (int) p.notes.size())
         return;
     const auto scale = proc.currentScale();
     auto n = p.notes[(size_t) selected];
-    n.offset = mm::stepOffset (n.offset, direction, proc.scaleLockOn() ? &scale : nullptr, proc.currentKey());
+    n.offset = mm::stepOffset (n.offset, direction, chromatic ? nullptr : &scale, proc.currentKey());
     if (n == p.notes[(size_t) selected])
         return;
     proc.beginEdit();
@@ -434,7 +444,7 @@ bool PatternGrid::keyPressed (const KeyPress& key)
     }
     if (code == KeyPress::upKey || code == KeyPress::downKey)
     {
-        moveSelected (code == KeyPress::upKey ? 1 : -1);
+        moveSelected (code == KeyPress::upKey ? 1 : -1, key.getModifiers().isAltDown());
         return true;
     }
     if (code == KeyPress::leftKey || code == KeyPress::rightKey)

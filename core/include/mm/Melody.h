@@ -57,10 +57,13 @@ namespace mm
     /** A new melody: rhythm and notes. */
     Pattern makeMelody (int bars, const MelodySettings&, const MelodyStyle&, const ScaleContext&, int key, Rng&);
 
-    /** New notes for an existing rhythm (starts, lengths and velocities stay).
-        keepFirstBar: a variation - bar 1 stays as it is and the other bars are re-written around it. */
+    /** New notes for an existing rhythm (starts, lengths and velocities stay). The melody stays in
+        the pattern's register: from its lowest note up.
+        keepFirstBar: a variation - bar 1 stays as it is and the other bars are re-written around it.
+        topOnly: the bottom notes (the lowest note of the pattern and the lower notes of stacked
+        chords) stay; only the notes above them change. */
     void melodiseNotes (Pattern&, const MelodySettings&, const MelodyStyle&, const ScaleContext&, int key, Rng&,
-                        bool keepFirstBar = false);
+                        bool keepFirstBar = false, bool topOnly = false);
 
     /** Keeps the melody (the notes, in order, bar by bar) and gives it a new rhythm. */
     void rhythmiseMelody (Pattern&, const MelodySettings&, const MelodyStyle&, Rng&);

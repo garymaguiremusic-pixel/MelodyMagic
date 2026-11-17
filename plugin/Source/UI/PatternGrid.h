@@ -9,7 +9,8 @@
     (labelled as notes of the Scale Lock key; offset 0 = the key's root).
       click = add, drag = move, drag the right edge = length, Alt = no snap,
       right-click / double-click = delete,
-      mouse wheel over a note = up / down a semitone (a scale note when Scale Lock is on).
+      notes are locked to the Key + Scale (hold Alt for a free semitone),
+      mouse wheel over a note = up / down to the next scale note (Alt = a semitone).
     Drop a .mid file on it to import it. Drag in the lower strip for velocity.
     Clicking it takes the keyboard focus: Up / Down move the selected note, Left / Right
     select the previous / next note, Delete removes it, Ctrl+Z / Ctrl+Y undo / redo.
@@ -61,7 +62,8 @@ private:
     int noteAt (juce::Point<float>) const;
     int velocityNoteAt (float x) const;
     void setVelocityFromY (int index, float y);
-    void moveSelected (int direction);
+    void moveSelected (int direction, bool chromatic);
+    int snapToKey (int offset) const;
     void ensureEditStarted();
     void commit (mm::Pattern&);
     int selectAfterSort (mm::Pattern&, const mm::PatternNote&);

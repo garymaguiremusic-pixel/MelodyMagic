@@ -73,6 +73,36 @@ namespace mm
         return 8;
     }
 
+    void resizePattern (Pattern& p, int bars)
+    {
+        const int oldBars = std::max (1, p.bars);
+        p.bars = legalBars (bars);
+        if (p.bars > oldBars)
+        {
+            const auto source = p.notes;
+            for (int b = oldBars; b < p.bars; ++b)
+            {
+                const int from = (b % oldBars) * kTicksPerBar;
+                const int shift = (b - b % oldBars) * kTicksPerBar;
+                for (auto n : source)
+                {
+                    if (n.start < from || n.start >= from + kTicksPerBar)
+                        continue;
+                    n.start += shift;
+                    n.end += shift;
+                    p.notes.push_back (n);
+                }
+            }
+        }
+        for (auto& n : p.notes)
+            n.end = std::min (n.end, p.lengthTicks());
+        p.notes.erase (std::remove_if (p.notes.begin(), p.notes.end(), [&p] (const PatternNote& n)
+        {
+            return n.start >= p.lengthTicks() || n.end <= n.start;
+        }), p.notes.end());
+        p.sort();
+    }
+
     //==============================================================================
     void shuffleNotes (Pattern& p, const std::vector<int>& pool, Rng& rng)
     {
@@ -193,7 +223,7 @@ namespace mm
             }
     }
 
-    Pattern patternFromPhrase (const Phrase& ph)
+    Pattern patternFromPhrase (const Phrase& ph, const ScaleContext* scale, int key)
     {
         Pattern p;
         p.name = ph.name;
@@ -206,7 +236,13 @@ namespace mm
             PatternNote pn;
             pn.start = n.start;
             pn.end = std::min (std::max (n.end, n.start + 1), p.lengthTicks());
-            pn.offset = std::clamp ((n.lane() - kCentreLane) * 12, -kMaxOffset, kMaxOffset);
+            int rowOffset = 0;
+            if (scale != nullptr)
+            {
+                const int root = scale->stepsAbove (60 + key, 0);
+                rowOffset = scale->stepsAbove (60 + key, 2 * n.row()) - root;
+            }
+            pn.offset = std::clamp ((n.lane() - kCentreLane) * 12 + rowOffset, -kMaxOffset, kMaxOffset);
             pn.velocity = std::clamp (n.velocity, 1, 127);
             p.notes.push_back (pn);
         }

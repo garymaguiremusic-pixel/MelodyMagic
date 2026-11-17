@@ -439,10 +439,10 @@ namespace mm
         void writeBars (const std::vector<std::vector<PatternNote>>& rhythms, const std::vector<int>& form,
                         const std::vector<int>& chords, const MelodySettings& m, const MelodyStyle& style,
                         const ScaleContext& sc, Rng& rng, std::vector<std::vector<int>>& degreesOut,
-                        const std::vector<int>* fixedHook = nullptr)
+                        const std::vector<int>* fixedHook = nullptr, const Ranges* rangeOverride = nullptr)
         {
             const int n = scaleSize (sc);
-            auto r = rangeFor (m, style, n);
+            auto r = rangeOverride != nullptr ? *rangeOverride : rangeFor (m, style, n);
             const bool useFixed = fixedHook != nullptr && ! fixedHook->empty() && fixedHook->size() == rhythms[0].size();
             if (useFixed)
                 for (int d : *fixedHook)
@@ -551,7 +551,7 @@ namespace mm
     }
 
     void melodiseNotes (Pattern& p, const MelodySettings& m, const MelodyStyle& style, const ScaleContext& sc, int key, Rng& rng,
-                        bool keepFirstBar)
+                        bool keepFirstBar, bool topOnly)
     {
         if (p.notes.empty())
             return;
@@ -612,8 +612,58 @@ namespace mm
                 hook.push_back (top.count (r.start) ? top[r.start] : 0);
         }
 
+        // Stay in the pattern's register: the melody starts at the pattern's lowest note and goes up
+        // as far as Range allows (or as high as the pattern already goes).
+        const auto original = p.notes;
+        int lowDeg = 1000, highDeg = -1000, lowOffset = 1000;
+        for (auto& note : p.notes)
+        {
+            const int d = offsetToDegree (note.offset, sc, key);
+            lowDeg = std::min (lowDeg, d);
+            highDeg = std::max (highDeg, d);
+            lowOffset = std::min (lowOffset, note.offset);
+        }
+
+        // Top notes only: the bottom notes (the pattern's lowest note, and the lower notes of
+        // stacked chords) stay; only the notes above them get the new melody.
+        std::vector<bool> keep (p.notes.size(), false);
+        if (topOnly)
+        {
+            std::map<int, int> topIndex;   // start -> index of the highest note there
+            for (int i = 0; i < (int) p.notes.size(); ++i)
+            {
+                auto it = topIndex.find (p.notes[(size_t) i].start);
+                if (it == topIndex.end() || p.notes[(size_t) i].offset >= p.notes[(size_t) it->second].offset)
+                    topIndex[p.notes[(size_t) i].start] = i;
+            }
+            bool anyFree = false;
+            for (int i = 0; i < (int) p.notes.size(); ++i)
+            {
+                const bool isTop = topIndex[p.notes[(size_t) i].start] == i;
+                keep[(size_t) i] = ! isTop || p.notes[(size_t) i].offset == lowOffset;
+                anyFree = anyFree || ! keep[(size_t) i];
+            }
+            if (! anyFree)
+            {
+                // every note is on the bottom note (e.g. a 16ths arp on the root): the notes on
+                // the beat stay as a pedal, the ones in between become the melody
+                for (int i = 0; i < (int) p.notes.size(); ++i)
+                    keep[(size_t) i] = p.notes[(size_t) i].start % kPhrasePpq == 0;
+                bool free = false;
+                for (bool k : keep) free = free || ! k;
+                if (! free)
+                    for (int i = 0; i < (int) p.notes.size(); ++i)
+                        keep[(size_t) i] = p.notes[(size_t) i].start % kTicksPerBar == 0;
+            }
+        }
+
+        const auto def = rangeFor (m, style, n);
+        Ranges range;
+        range.lo = topOnly ? lowDeg + 1 : lowDeg;
+        range.hi = std::max ({ highDeg, range.lo + (def.hi - def.lo), range.lo + 4 });
+
         std::vector<std::vector<int>> degrees;
-        writeBars (rhythms, form, chords, m, style, sc, rng, degrees, keepFirstBar ? &hook : nullptr);
+        writeBars (rhythms, form, chords, m, style, sc, rng, degrees, keepFirstBar ? &hook : nullptr, &range);
 
         // write back: the top note of each onset gets the melody, the others stack below it
         std::map<int, int> melodyAt;
@@ -637,7 +687,35 @@ namespace mm
                 --d;
                 while (! isChordTone (d, chord, n)) --d;
             }
+            while (d < range.lo)   // stacked notes never go below the pattern's bottom note
+                d += n;
             note.offset = std::clamp (degreeToOffset (d, sc, key), -kMaxOffset, kMaxOffset);
+        }
+
+        // the kept notes go back exactly as they were (p.notes is still in its original order)
+        for (size_t i = 0; i < p.notes.size(); ++i)
+            if (keep[i])
+                p.notes[i].offset = original[i].offset;
+
+        // a new top note always sits above the notes it is stacked on
+        if (topOnly)
+        {
+            std::map<int, int> highestKept;
+            for (size_t i = 0; i < p.notes.size(); ++i)
+                if (keep[i])
+                {
+                    auto it = highestKept.find (p.notes[i].start);
+                    if (it == highestKept.end() || p.notes[i].offset > it->second)
+                        highestKept[p.notes[i].start] = p.notes[i].offset;
+                }
+            for (size_t i = 0; i < p.notes.size(); ++i)
+            {
+                auto it = highestKept.find (p.notes[i].start);
+                if (keep[i] || it == highestKept.end())
+                    continue;
+                while (p.notes[i].offset <= it->second && p.notes[i].offset + 12 <= kMaxOffset)
+                    p.notes[i].offset += 12;
+            }
         }
         p.sort();
     }

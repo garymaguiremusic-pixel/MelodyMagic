@@ -60,6 +60,7 @@ private:
     // Arp
     juce::ComboBox modeBox, speedBox;
     VirusKnob randomVelKnob { VirusKnob::Size::Small, "Rnd Vel" };
+    juce::TextButton autoPlayButton { "Auto Play" };
 
     // Scale lock
     juce::ComboBox keyBox, scaleBox;
@@ -72,7 +73,8 @@ private:
     VirusKnob densityKnob { VirusKnob::Size::Small, "Density" };
     VirusKnob rangeKnob   { VirusKnob::Size::Small, "Range" };
     VirusKnob gateKnob    { VirusKnob::Size::Small, "Gate" };
-    juce::TextButton newMelodyButton { "New Melody" }, newPatternButton { "New Pattern" }, fileStyleButton { "Learn From MIDI File" };
+    juce::TextButton newMelodyButton { "New Melody" }, newPatternButton { "New Pattern" }, fileStyleButton { "Learn From File" },
+                     topOnlyButton { "Top Notes Only" };
 
     // Groove
     juce::ComboBox grooveBox;

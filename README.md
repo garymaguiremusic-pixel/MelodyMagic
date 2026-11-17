@@ -39,7 +39,9 @@ MelodyMagic takes MIDI in and sends MIDI out; it makes no sound itself. It loads
 | Right-click or double-click a note | delete it |
 | Drag in the lower strip | set velocities |
 
-**Length** (1, 2, 4 or 8 bars), **Snap**, **Clear**, **Undo** and **Redo** are around the pattern.
+Drawing is **locked to the Key + Scale**: new or dragged notes snap to the nearest scale note, and the mouse wheel and Up/Down move to the next scale note. Hold **Alt** to place or move by a free semitone.
+
+**Length** (1, 2, 4 or 8 bars) copies the pattern into the new bars (1 → 2 bars plays it twice). **Snap**, **Clear**, **Undo** and **Redo** are around the pattern.
 
 **Arp.**
 
@@ -48,6 +50,7 @@ MelodyMagic takes MIDI in and sends MIDI out; it makes no sound itself. It loads
   * **Melody** works like ArpSampler's Step mode. It plays the pattern's own notes from the Key's root, and the key you hold only starts it and picks the octave: C3–B3 plays it as written, C2–B2 an octave down.
 * **Speed** runs from x1/4 to x4 of the host tempo.
 * **Rnd Vel** adds a random ± velocity.
+* **Auto Play** is the "ghost note". While the DAW plays, MelodyMagic plays with no MIDI note on its track, as if the Key's root (octave 3) were held. Route its output to a synth and press play. A key you play takes over while you hold it.
 
 While the DAW plays, the pattern follows the song position. While it is stopped, the pattern starts when you press a key.
 
@@ -56,12 +59,13 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
 **Melody Maker.** The melodies follow how classic trance leads are written, and they are always in the Key and Scale:
 
 * **Chords** sets the progression the melody is written over, one chord per bar. The panel shows the actual chords in your key (e.g. Am F C G). **Auto** uses the classic trance progression for the scale.
-* **New Melody** writes a melody for the current Length:
+* The melodies are written the way classic trance leads are:
   * notes on the beat are chord tones, and the notes in between move by scale step (passing and neighbour notes), with the odd leap;
   * a one-bar hook repeats over each chord, moved to fit it, and an answer bar ends the phrase (4 bars = A A A B, 8 bars = A A A B A A A C);
   * rhythms come from classic trance lead rhythms (offbeat, 3-3-2, rolling, gallop and others).
   * **Density** sets how busy the rhythm is, **Range** how far the melody spreads, and **Gate** the note length.
-* **New Melody** writes new notes. The pattern (rhythm) stays exactly as it is.
+* **New Melody** writes new notes. The pattern (rhythm) stays exactly as it is, and the melody stays in the pattern's register, from its lowest note up.
+* **Top Notes Only** makes New Melody keep the bottom notes (the pattern's lowest note and the lower notes of chords) and change only the notes above them. On a pattern that is all one note, the notes on the beat stay as a pedal and the ones in between become the melody.
 * **New Pattern** writes a new rhythm. The notes stay, in the same order.
 * On an empty pattern (after **Clear**), either button writes both.
 * Both buttons switch the Arp to **Melody** mode, so you hear the melody as written.
@@ -72,7 +76,7 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
 **Library.** It has three tabs; click an entry to load it, and with the list focused the arrow keys browse.
 
 * **Factory:** the built-in patterns.
-* **Phrases:** the library folder (**Folder...**). It holds `nora_fas_library.json` or `.fas` files; these are not in this repository, because their pack asks that they not be redistributed.
+* **Phrases:** the library folder (**Folder...**). A phrase's rows become chord notes of your key (1st, 3rd, 5th of the scale), and loading one switches the Arp to Melody mode. It holds `nora_fas_library.json` or `.fas` files; these are not in this repository, because their pack asks that they not be redistributed.
 * **My MIDI:** your own MIDI files, kept in `Documents\MelodyMagic\My MIDI`. **Import...** copies `.mid` files in and loads them, and **Save...** stores the current pattern there. Right-click an entry to delete it or show it in Explorer. Dropping a `.mid` on the pattern imports it into My MIDI too.
 
 **Groove.** Pick a preset from the Groove dropdown (they come from `nora_qas_library.json` in the library folder). **Q Start** and **Q End** pull note starts and ends onto it; **Link** uses one strength for both.

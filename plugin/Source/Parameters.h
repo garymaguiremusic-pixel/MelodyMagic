@@ -26,6 +26,8 @@ namespace mmp
         inline constexpr const char* genRange       = "Gen_Range";
         inline constexpr const char* genGate        = "Gen_Gate";
         inline constexpr const char* genProgression = "Gen_Progression";
+        inline constexpr const char* genTopOnly     = "Gen_Top_Notes_Only";
+        inline constexpr const char* autoPlay       = "Auto_Play";
     }
 
     inline juce::StringArray getModeNames()
@@ -105,6 +107,8 @@ namespace mmp
         integer (ParamIDs::genRange,      "Melody Range", 5, 24, 14, " st");
         integer (ParamIDs::genGate,       "Melody Gate", 10, 100, 80, " %");
         choice  (ParamIDs::genProgression, "Melody Chords", getProgressionNames(), 0);
+        toggle  (ParamIDs::genTopOnly,    "Melody Top Notes Only", false);
+        toggle  (ParamIDs::autoPlay,      "Auto Play", false);
         return layout;
     }
 }

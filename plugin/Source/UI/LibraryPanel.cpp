@@ -284,7 +284,9 @@ void LibraryPanel::loadEntry (int row)
     if (auto it = lib->phrases.find (k); it != lib->phrases.end())
     {
         proc.loadedLibraryKey = key;
-        proc.setPattern (mm::patternFromPhrase (it->second));
+        const auto scale = proc.currentScale();
+        proc.setPattern (mm::patternFromPhrase (it->second, &scale, proc.currentKey()));
+        proc.switchToMelodyMode();
     }
 }
 

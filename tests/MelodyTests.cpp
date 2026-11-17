@@ -268,3 +268,90 @@ TEST_CASE ("Keep Both: bar 1 stays, the rest is re-written around it", "[melody]
     }
     CHECK (changed > 0);
 }
+
+TEST_CASE ("New Melody stays in the pattern's register", "[melody][register]")
+{
+    const int key = 9;
+    const auto sc = ScaleContext::make (NaturalMinor, key);
+    MelodySettings m;   // Range 14 semitones
+    for (int base : { -12, 0, 12 })
+    {
+        Pattern p;
+        for (int i = 0; i < 16; ++i)
+            p.notes.push_back ({ i * 24, i * 24 + 18, base, 100 });
+        for (std::int64_t seed = 1; seed <= 10; ++seed)
+        {
+            auto q = p;
+            JuceLcg r (seed);
+            melodiseNotes (q, m, defaultMelodyStyle (sc), sc, key, r);
+            for (auto& n : q.notes)
+            {
+                CHECK (n.offset >= base);          // never below the pattern's bottom note
+                CHECK (n.offset <= base + 16);     // no octave jump: within Range above it
+            }
+        }
+    }
+}
+
+TEST_CASE ("Top notes only keeps the bottom notes", "[melody][top]")
+{
+    const int key = 9;
+    const auto sc = ScaleContext::make (NaturalMinor, key);
+
+    // stabs: stacked A C E chords plus a bass note on the beats
+    Pattern stabs;
+    for (int i = 0; i < 8; ++i)
+    {
+        const int t = i * 48;
+        if (i % 2 == 0) stabs.notes.push_back ({ t, t + 40, -12, 110 });
+        else
+            for (int o : { 0, 3, 7 })
+                stabs.notes.push_back ({ t, t + 40, o, 100 });
+    }
+    stabs.sort();
+    for (std::int64_t seed = 1; seed <= 10; ++seed)
+    {
+        auto q = stabs;
+        JuceLcg r (seed);
+        melodiseNotes (q, {}, defaultMelodyStyle (sc), sc, key, r, false, true);
+        REQUIRE (q.notes.size() == stabs.notes.size());
+        for (int i = 0; i < 8; ++i)
+        {
+            std::vector<int> before, after;
+            for (auto& n : stabs.notes) if (n.start == i * 48) before.push_back (n.offset);
+            for (auto& n : q.notes)     if (n.start == i * 48) after.push_back (n.offset);
+            std::sort (after.begin(), after.end());
+            if (i % 2 == 0)
+                CHECK (after == before);            // the bass note stays
+            else
+            {
+                CHECK (after[0] == 0);              // lower chord notes stay
+                CHECK (after[1] == 3);
+                CHECK (after[2] > -12);             // the top note moves, above the bottom
+                CHECK (sc.inScale (key + after[2]));
+            }
+        }
+    }
+
+    // a 16ths arp all on the root: the beats stay as a pedal, the notes between become the melody
+    Pattern arp;
+    for (int i = 0; i < 16; ++i)
+        arp.notes.push_back ({ i * 24, i * 24 + 18, 0, 100 });
+    int moved = 0;
+    for (std::int64_t seed = 1; seed <= 5; ++seed)
+    {
+        auto q = arp;
+        JuceLcg r (seed);
+        melodiseNotes (q, {}, defaultMelodyStyle (sc), sc, key, r, false, true);
+        for (auto& n : q.notes)
+        {
+            if (n.start % 96 == 0) CHECK (n.offset == 0);
+            else
+            {
+                CHECK (n.offset > 0);
+                if (n.offset != 0) ++moved;
+            }
+        }
+    }
+    CHECK (moved > 0);
+}

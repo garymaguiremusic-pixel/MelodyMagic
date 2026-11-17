@@ -25,7 +25,7 @@ namespace
             "Hold a key or a chord: MelodyMagic plays the pattern with it. One key plays the pattern as a melody; a chord is arpeggiated.",
             "ARP MODE:  the order the held keys are played in: Up, Down, Up & Down, Down & Up. Each pattern note plays the next key.",
             "PATTERN:  click to add a note, drag to move, drag the right edge for length, right-click / double-click to delete, Alt = no snap.",
-            "MOUSE WHEEL over a note (or Up / Down after clicking the pattern) moves it a semitone (a scale note with Scale Lock on).",
+            "Notes you draw are locked to KEY + SCALE.  MOUSE WHEEL over a note (or Up / Down) moves it to the next scale note; Alt = a semitone.",
             "Clicking the pattern gives it the keyboard: Left / Right select notes, Delete removes, Ctrl+Z undo. Click the Library to browse with the arrows.",
             "Rows show the notes when you hold the KEY's root; other keys move the whole pattern. Drag in the lower strip for velocity.",
             "SCALE LOCK:  every note sent (live and Drag MIDI) moves to the nearest note of KEY + SCALE.",
@@ -36,6 +36,8 @@ namespace
             "SHUFFLE FILE NOTES (Library):  keeps the rhythm and uses exactly the file's notes, in new places.",
             "GROOVE:  pick a groove preset; Q Start / Q End pull note starts / ends onto it.",
             "DRAG MIDI:  drag the blue grip onto a DAW track (the last chord you played, at least 4 bars).",
+            "AUTO PLAY:  while the DAW plays, MelodyMagic plays with no MIDI note on its track (the Key's root in octave 3).",
+            "TOP NOTES ONLY:  New Melody keeps the bottom notes and changes only the notes above them.",
             "With the DAW stopped, the pattern starts when you press a key. Knobs move in steps of 1 (drag or mouse wheel).",
             "",
             "Click anywhere to close."
@@ -75,13 +77,7 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     {
         if (updating) return;
         auto pt = processor.getPattern();
-        pt.bars = lengthBars[jlimit (0, 3, lengthBox.getSelectedItemIndex())];
-        for (auto& n : pt.notes)
-            n.end = jmin (n.end, pt.lengthTicks());
-        pt.notes.erase (std::remove_if (pt.notes.begin(), pt.notes.end(), [&pt] (const mm::PatternNote& n)
-        {
-            return n.start >= pt.lengthTicks() || n.end <= n.start;
-        }), pt.notes.end());
+        mm::resizePattern (pt, lengthBars[jlimit (0, 3, lengthBox.getSelectedItemIndex())]);
         processor.setPattern (pt);
     };
     snapBox.onChange = [this] { grid.setSnapTicks (snapTicks[jlimit (0, 5, snapBox.getSelectedItemIndex())]); };
@@ -105,6 +101,9 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     setupCombo (speedBox, mmp::getSpeedNames(), "Pattern speed against the host tempo");
     attachCombo (modeBox, mmp::ParamIDs::arpMode);
     attachCombo (speedBox, mmp::ParamIDs::speed);
+    attachToggle (autoPlayButton, mmp::ParamIDs::autoPlay,
+                  "Auto Play: while the DAW plays, MelodyMagic plays without any MIDI note on its track,\n"
+                  "as if the Key's root (octave 3) was held. A key you play takes over while you hold it.");
     attachKnob (randomVelKnob, mmp::ParamIDs::randomVel, [] (double v) { return "+/- " + String (roundToInt (v)); },
                 "Random velocity, + or - this much");
 
@@ -146,6 +145,9 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
                                 "Notes on the beat are chord tones of CHORDS, always in the Key + Scale.");
     newPatternButton.setTooltip ("A new pattern (rhythm). The notes stay, in the same order.");
     fileStyleButton.setTooltip ("New Melody learns from the imported MIDI file: its intervals, favourite notes and range");
+    attachToggle (topOnlyButton, mmp::ParamIDs::genTopOnly,
+                  "Top Notes Only: New Melody keeps the bottom notes (the pattern's lowest note and the lower notes of chords)\n"
+                  "and only changes the notes above them. On a pattern that is all one note, the beats stay as a pedal.");
     fileStyleButton.setClickingTogglesState (true);
     newMelodyButton.onClick = [this] { processor.newMelody(); grid.grabKeyboardFocus(); };
     newPatternButton.onClick = [this] { processor.newPattern(); grid.grabKeyboardFocus(); };
@@ -386,7 +388,8 @@ void MelodyMagicPanel::resized()
 
     // arp
     modeBox.setBounds (752, 74, 140, 22);
-    speedBox.setBounds (752, 106, 140, 22);
+    speedBox.setBounds (752, 104, 140, 22);
+    autoPlayButton.setBounds (708, 134, 184, 22);
     randomVelKnob.setBounds (906, 70, 72, 84);
 
     // scale lock
@@ -404,7 +407,8 @@ void MelodyMagicPanel::resized()
     gateKnob.setBounds (904, 364, 64, 64);
     newMelodyButton.setBounds (708, 434, 136, 26);
     newPatternButton.setBounds (848, 434, 136, 26);
-    fileStyleButton.setBounds (708, 466, 276, 24);
+    fileStyleButton.setBounds (708, 466, 136, 24);
+    topOnlyButton.setBounds (848, 466, 136, 24);
 
     // groove
     grooveBox.setBounds (708, 532, 170, 22);
@@ -447,7 +451,7 @@ void MelodyMagicPanel::paint (Graphics& g)
     // right column
     CustomLookAndFeel::drawPanel (g, arpArea, "Arp");
     CustomLookAndFeel::drawSmallLabel (g, "Mode", { 708.0f, 74.0f, 42.0f, 22.0f }, Justification::centredLeft);
-    CustomLookAndFeel::drawSmallLabel (g, "Speed", { 708.0f, 106.0f, 42.0f, 22.0f }, Justification::centredLeft);
+    CustomLookAndFeel::drawSmallLabel (g, "Speed", { 708.0f, 104.0f, 42.0f, 22.0f }, Justification::centredLeft);
 
     CustomLookAndFeel::drawPanel (g, scaleArea, "Scale Lock");
     CustomLookAndFeel::drawSmallLabel (g, "Key", { 708.0f, 192.0f, 34.0f, 22.0f }, Justification::centredLeft);

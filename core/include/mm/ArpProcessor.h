@@ -18,6 +18,7 @@ namespace mm
         bool scaleLock = false;     // every output note moves to the nearest scale note
         ScaleContext scale = ScaleContext::make (Major, 0);
         int key = 0;                // Melody mode plays from this key's root
+        bool autoPlay = false;      // with no key held and the host playing, play as if the key's root (octave 3) was held
         bool bypassed = false;
     };
 

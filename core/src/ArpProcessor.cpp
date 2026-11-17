@@ -215,7 +215,7 @@ namespace mm
                     if (it != chord.end())
                         chord.erase (it);
                     heldKeys = std::max (0, heldKeys - 1);
-                    if (chord.empty())
+                    if (chord.empty() && ! (s.autoPlay && t.playing))
                         endAll (e.time, out);
                 }
                 continue;
@@ -228,7 +228,10 @@ namespace mm
                 out.push_back (Event::off (e.time, playing->pitch, playing->channel));
                 sounding.erase (playing);
             }
-            if (e.type != Event::On || chord.empty() || pattern == nullptr || id < 0 || id >= (int) pattern->offset.size())
+            // Auto Play: with nothing held and the host playing, the key's root in octave 3 plays
+            const std::vector<HeldNote> ghost { HeldNote { 60 + std::clamp (s.key, 0, 11), 100, 1 } };
+            const auto& keys = (chord.empty() && s.autoPlay && t.playing) ? ghost : chord;
+            if (e.type != Event::On || keys.empty() || pattern == nullptr || id < 0 || id >= (int) pattern->offset.size())
                 continue;
 
             int pitch, vel;
@@ -236,14 +239,14 @@ namespace mm
             if (s.order == ArpOrder::Melody)
             {
                 // the pattern's own notes, from the Key's root in the octave of the lowest held key
-                key = &chord.front();
+                key = &keys.front();
                 pitch = 12 * floorDiv (key->note, 12) + std::clamp (s.key, 0, 11) + pattern->offset[(size_t) id];
                 vel = velocityOf (e.vel, 127, s.randomVel, rng);   // the file's / pattern's velocity
             }
             else
             {
-                const auto seq = arpSequence ((int) chord.size(), s.order);
-                key = &chord[(size_t) seq[(size_t) pattern->step[(size_t) id] % seq.size()]];
+                const auto seq = arpSequence ((int) keys.size(), s.order);
+                key = &keys[(size_t) seq[(size_t) pattern->step[(size_t) id] % seq.size()]];
                 pitch = key->note + pattern->offset[(size_t) id];
                 vel = velocityOf (e.vel, key->vel, s.randomVel, rng);
             }

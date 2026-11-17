@@ -65,6 +65,10 @@ namespace mm
     /** Rounds bars to 1, 2, 4 or 8. */
     int legalBars (int bars);
 
+    /** Changes the length. Longer: the pattern is copied into the new bars (1 -> 2 bars plays it
+        twice, 2 -> 4 repeats both bars). Shorter: notes past the end are dropped or cut. */
+    void resizePattern (Pattern&, int bars);
+
     //==============================================================================
     // Shuffle
 
@@ -83,6 +87,8 @@ namespace mm
     /** The key and scale (Major or Natural Minor) that fit a clip best, by note length. */
     void detectKey (const MidiClip&, int& key, int& scaleIndex);
 
-    /** A library phrase as a pattern: its rhythm and velocities, octave lanes as +-12. */
-    Pattern patternFromPhrase (const Phrase&);
+    /** A library phrase as a pattern: its rhythm and velocities, octave lanes as +-12. With a
+        scale, each row becomes a chord note of the key (rows 1, 2, 3 = the scale's 1st, 3rd, 5th),
+        so stabs stay chords and arps stay arpeggios when played in Melody mode. */
+    Pattern patternFromPhrase (const Phrase&, const ScaleContext* scale = nullptr, int key = 0);
 }

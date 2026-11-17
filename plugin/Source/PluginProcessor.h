@@ -76,6 +76,7 @@ public:
         New Pattern: a new rhythm, the notes (in order) stay. Both switch the Arp to Melody mode. */
     void newMelody();
     void newPattern();
+    void switchToMelodyMode();
     void randomiseNotes()           { newMelody(); }
     void shuffleFileNotes();        // keeps the rhythm, moves the MIDI file's notes around
     int numFileNotes() const noexcept               { return (int) filePattern.notes.size(); }
@@ -136,7 +137,6 @@ private:
     mm::MelodySettings melodySettings() const;
     mm::MelodyStyle melodyStyle() const;
     void setParam (const char* id, float value);
-    void switchToMelodyMode();
     int param (const char* id) const;
 
     // model

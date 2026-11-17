@@ -73,7 +73,10 @@ void MidiMonitor::paint (Graphics& g)
         names.add (mmp::noteName (note));
     g.setFont (CustomLookAndFeel::uiFont (12.0f, true));
     g.setColour (chord.empty() ? VirusColours::labelText.withAlpha (0.5f) : Colours::white);
-    g.drawFittedText (chord.empty() ? String ("hold some notes") : names.joinIntoString (" "), left.toNearestInt(), Justification::centredLeft, 1, 0.7f);
+    const bool autoPlay = proc.apvts.getRawParameterValue (mmp::ParamIDs::autoPlay)->load() > 0.5f;
+    const String idle = autoPlay ? "Auto Play: " + mmp::noteName (60 + proc.currentKey()) + " (while the DAW plays)"
+                                 : String ("hold some notes, or turn on Auto Play");
+    g.drawFittedText (chord.empty() ? idle : names.joinIntoString (" "), left.toNearestInt(), Justification::centredLeft, 1, 0.7f);
 
     auto right = b.removeFromRight (200.0f);
     g.setFont (CustomLookAndFeel::uiFont (10.0f, true));
