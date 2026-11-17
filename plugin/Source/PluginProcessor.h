@@ -72,12 +72,11 @@ public:
     void redo();
 
     // Melody Maker (always in the Key + Scale)
-    /** New Melody. Keep Pattern: new notes in the same rhythm. Keep Melody: the same notes in a
-        new rhythm. Both: a variation (bar 1 stays, the rest is re-written). Neither: all new. */
-    void generateNewPattern();
-    bool keepPattern = false, keepMelody = false;
-    juce::String describeNewMelody() const;
-    void randomiseNotes();          // keeps the rhythm, writes a new melody over it
+    /** New Melody: new notes, the pattern (rhythm) stays exactly as it is.
+        New Pattern: a new rhythm, the notes (in order) stay. Both switch the Arp to Melody mode. */
+    void newMelody();
+    void newPattern();
+    void randomiseNotes()           { newMelody(); }
     void shuffleFileNotes();        // keeps the rhythm, moves the MIDI file's notes around
     int numFileNotes() const noexcept               { return (int) filePattern.notes.size(); }
     const juce::String& getFileName() const noexcept { return fileName; }
@@ -136,6 +135,8 @@ private:
     mm::ArpSettings readSettings() const;
     mm::MelodySettings melodySettings() const;
     mm::MelodyStyle melodyStyle() const;
+    void setParam (const char* id, float value);
+    void switchToMelodyMode();
     int param (const char* id) const;
 
     // model

@@ -44,8 +44,11 @@ namespace mm
 
     //==============================================================================
     // Arp order
-    enum class ArpOrder { Up = 0, Down, UpDown, DownUp };
-    constexpr int kNumArpOrders = 4;
+    /** Up / Down / Up & Down / Down & Up arpeggiate the held keys. Melody plays the pattern's
+        notes from the Key's root (like ArpSampler's Step mode): the key you hold only starts it
+        and picks the octave, so an imported MIDI file plays back at its real pitches. */
+    enum class ArpOrder { Up = 0, Down, UpDown, DownUp, Melody };
+    constexpr int kNumArpOrders = 5;
     const char* arpOrderName (ArpOrder);
 
     /** Indices into the held keys (sorted low to high), one cycle of the order. The turn notes
@@ -72,9 +75,13 @@ namespace mm
     //==============================================================================
     // Import
 
-    /** A MIDI clip (any PPQ) as a pattern: up to kMaxBars, offsets relative to the key's root in
-        the octave at or below the clip's lowest note. 'fileNotes' receives every note's offset. */
+    /** A MIDI clip (any PPQ) as a pattern, up to kMaxBars from the bar of its first note.
+        Offsets are relative to the key's root in octave 3 (C3 = 60), so Melody mode plays the
+        file back at its real pitches. 'fileNotes' receives every note's offset. */
     Pattern patternFromMidi (const MidiClip&, int key, const std::string& name, std::vector<int>* fileNotes = nullptr);
+
+    /** The key and scale (Major or Natural Minor) that fit a clip best, by note length. */
+    void detectKey (const MidiClip&, int& key, int& scaleIndex);
 
     /** A library phrase as a pattern: its rhythm and velocities, octave lanes as +-12. */
     Pattern patternFromPhrase (const Phrase&);

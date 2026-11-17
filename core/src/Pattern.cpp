@@ -1,6 +1,7 @@
 #include "mm/Pattern.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace mm
@@ -20,8 +21,9 @@ namespace mm
             case ArpOrder::Up:     return "Up";
             case ArpOrder::Down:   return "Down";
             case ArpOrder::UpDown: return "Up & Down";
-            case ArpOrder::DownUp:
-            default:               return "Down & Up";
+            case ArpOrder::DownUp: return "Down & Up";
+            case ArpOrder::Melody:
+            default:               return "Melody";
         }
     }
 
@@ -37,6 +39,7 @@ namespace mm
 
         switch (order)
         {
+            case ArpOrder::Melody: return { 0 };
             case ArpOrder::Up:   return up;
             case ArpOrder::Down: return down;
             case ArpOrder::UpDown:
@@ -116,8 +119,15 @@ namespace mm
             lowest = std::min (lowest, n.note);
         }
         const double origin = std::floor (first / kTicksPerBar) * kTicksPerBar;
-        const int keyRoot = std::clamp (key, 0, 11);
-        const int reference = lowest - floorMod (lowest - keyRoot, 12);   // key root at or below the lowest note
+        const int reference = 60 + std::clamp (key, 0, 11);   // the key's root in octave 3 (C3 = 60)
+        // a file far above or below is moved by whole octaves so it fits the offset range
+        int octaveShift = 0;
+        {
+            int lo = 127, hi = 0;
+            for (auto& n : c.notes) { lo = std::min (lo, n.note); hi = std::max (hi, n.note); }
+            while (hi + octaveShift - reference > kMaxOffset) octaveShift -= 12;
+            while (lo + octaveShift - reference < -kMaxOffset) octaveShift += 12;
+        }
 
         double end = 0.0;
         for (auto& n : c.notes)
@@ -128,7 +138,7 @@ namespace mm
             PatternNote pn;
             pn.start = (int) std::lround (s);
             pn.end = std::max (pn.start + 1, (int) std::lround (std::min (e, (double) kMaxBars * kTicksPerBar)));
-            pn.offset = std::clamp (n.note - reference, -kMaxOffset, kMaxOffset);
+            pn.offset = std::clamp (n.note + octaveShift - reference, -kMaxOffset, kMaxOffset);
             pn.velocity = std::clamp (n.vel, 1, 127);
             p.notes.push_back (pn);
             end = std::max (end, (double) pn.end);
@@ -149,6 +159,38 @@ namespace mm
                 fileNotes->push_back (n.offset);
         }
         return p;
+    }
+
+    void detectKey (const MidiClip& clip, int& key, int& scaleIndex)
+    {
+        std::array<double, 12> weight {};
+        for (auto& n : clip.notes)
+            weight[(size_t) floorMod (n.note, 12)] += std::max (1.0, n.end - n.start);
+        int firstPc = clip.notes.empty() ? 0 : floorMod (clip.notes.front().note, 12);
+        int lastPc = clip.notes.empty() ? 0 : floorMod (clip.notes.back().note, 12);
+
+        double best = -1.0;
+        key = 0;
+        scaleIndex = NaturalMinor;
+        for (int scale : { (int) NaturalMinor, (int) Major })
+            for (int k = 0; k < 12; ++k)
+            {
+                const auto sc = ScaleContext::make (scale, k);
+                double score = 0.0;
+                for (int pc = 0; pc < 12; ++pc)
+                    score += sc.inScale (pc) ? weight[(size_t) pc] : -2.0 * weight[(size_t) pc];
+                // the tonic: weighted, and where melodies often start and end
+                score += 0.5 * weight[(size_t) k];
+                if (firstPc == k) score += 0.05 * score;
+                if (lastPc == k)  score += 0.05 * score;
+                if (scale == NaturalMinor) score *= 1.001;   // trance: minor wins a tie
+                if (score > best)
+                {
+                    best = score;
+                    key = k;
+                    scaleIndex = scale;
+                }
+            }
     }
 
     Pattern patternFromPhrase (const Phrase& ph)

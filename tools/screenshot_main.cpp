@@ -42,8 +42,7 @@ int main (int argc, char** argv)
         pt.bars = 4;
         proc->setPattern (pt);
     }
-    proc->generateNewPattern();
-    proc->keepPattern = true;   // show the Keep Pattern state in the screenshot
+    proc->newMelody();
     std::unique_ptr<AudioProcessorEditor> editor (proc->createEditor());
     editor->setSize (MelodyMagicPanel::kBaseWidth, MelodyMagicPanel::kBaseHeight);
     for (int i = 0; i < 20; ++i)
@@ -66,28 +65,89 @@ int main (int argc, char** argv)
         std::printf ("state round trip: %s (%d bytes)\n", same ? "OK" : "MISMATCH", (int) state.getSize());
     }
 
-    // My MIDI: import a file, learn from it, randomise with its style, save
+    // User scenarios (MM_TEST_IMPORT=1)
     if (std::getenv ("MM_TEST_IMPORT") != nullptr)
     {
+        auto rhythmOf = [] (const mm::Pattern& p)
+        {
+            std::vector<std::pair<int, int>> v;
+            for (auto& n : p.notes) v.push_back ({ n.start, n.end });
+            return v;
+        };
+
+        // 1. a library phrase, then New Melody: the pattern must stay exactly the same
+        if (auto lib = proc->getLibrary(); lib != nullptr && ! lib->phrases.empty())
+        {
+            const auto& phrase = lib->phrases.at ("Phrases/kick101/Pluck_Stab/133.fas");
+            proc->setPattern (mm::patternFromPhrase (phrase));
+            const auto before = proc->getPattern();
+            bool same = true;
+            for (int i = 0; i < 5; ++i)
+            {
+                proc->newMelody();
+                same = same && rhythmOf (proc->getPattern()) == rhythmOf (before);
+            }
+            std::printf ("phrase + New Melody x5: pattern %s (%d notes)\n", same ? "UNCHANGED" : "CHANGED", (int) before.notes.size());
+
+            // 2. New Pattern: the notes (each onset's chord) stay in order, the rhythm changes
+            auto onsets = [] (const mm::Pattern& p)
+            {
+                std::vector<std::vector<int>> v;
+                int last = -1;
+                for (auto& n : p.notes)
+                {
+                    if (n.start != last) { v.push_back ({}); last = n.start; }
+                    v.back().push_back (n.offset);
+                }
+                return v;
+            };
+            const auto before2 = proc->getPattern();
+            const auto oldOnsets = onsets (before2);
+            proc->newPattern();
+            const auto newOnsets = onsets (proc->getPattern());
+            size_t k = 0;
+            bool inOrder = true;
+            for (auto& o : newOnsets)
+            {
+                size_t j = k;
+                while (j < oldOnsets.size() && oldOnsets[j] != o) ++j;
+                if (j == oldOnsets.size())   // a new bar starts again from that bar's first notes
+                {
+                    j = 0;
+                    while (j < oldOnsets.size() && oldOnsets[j] != o) ++j;
+                }
+                inOrder = inOrder && j < oldOnsets.size();
+                k = j;
+            }
+            std::printf ("New Pattern: every chord/note comes from the old pattern: %s, rhythm %s\n",
+                         inOrder ? "YES" : "NO", rhythmOf (proc->getPattern()) != rhythmOf (before2) ? "NEW" : "SAME");
+        }
+
+        // 3. import a G minor lead while the plugin is in A minor: it must play back exactly
         mm::MidiClip clip;
-        clip.ppq = 96;
-        const int line[] = { 69, 72, 76, 74, 72, 71, 69, 64 };
-        for (int b = 0; b < 2; ++b)
-            for (int i = 0; i < 8; ++i)
-                clip.notes.push_back ({ line[(i + b) % 8], 100, 1, b * 384.0 + i * 48.0, b * 384.0 + i * 48.0 + 36.0 });
-        const auto src = File::getSpecialLocation (File::tempDirectory).getChildFile ("mm_test_line.mid");
+        clip.ppq = 480;
+        const int line[] = { 79, 82, 86, 84, 82, 81, 79, 74, 79, 77, 75, 74, 72, 74, 75, 70 };
+        for (int i = 0; i < 16; ++i)
+            clip.notes.push_back ({ line[i], 80 + i * 2, 1, 1920.0 + i * 240.0, 1920.0 + i * 240.0 + 200.0 });
+        const auto src = File::getSpecialLocation (File::tempDirectory).getChildFile ("mm_test_gminor.mid");
         mm::writeMidiFile (src.getFullPathName().toStdString(), clip);
         String error;
         const bool ok = proc->addMidiToLibrary (src, error);
-        std::printf ("import: %s %s, file style %s, %d notes, key %s\n", ok ? "OK" : "FAILED", error.toRawUTF8(),
-                     proc->fileStyleActive() ? "on" : "off", proc->numFileNotes(), proc->loadedLibraryKey.toRawUTF8());
-        proc->randomiseNotes();
-        String notes;
-        for (auto& n : proc->getPattern().notes)
-            notes << mm::keyName (9 + n.offset) << "@" << n.start / 24 << " ";
-        std::printf ("randomised with file style: %s\n", notes.toRawUTF8());
-        const auto saved = proc->savePatternToLibrary ("Test Save");
-        std::printf ("saved: %s\n", saved.getFullPathName().toRawUTF8());
+        std::printf ("import: %s %s -> key %s %s, arp mode %s\n", ok ? "OK" : "FAILED", error.toRawUTF8(),
+                     mm::keyName (proc->currentKey()), mm::scaleName (proc->currentScaleIndex()),
+                     mm::arpOrderName ((mm::ArpOrder) roundToInt (proc->apvts.getRawParameterValue (mmp::ParamIDs::arpMode)->load())));
+        const auto rendered = proc->renderMidiFile();
+        mm::MidiClip back;
+        mm::readMidiFile (rendered.getFullPathName().toStdString(), back);
+        auto b96 = back.rescaled (96);
+        int match = 0;
+        for (int i = 0; i < 16 && i < (int) b96.notes.size(); ++i)
+            if (b96.notes[(size_t) i].note == line[i] && std::abs (b96.notes[(size_t) i].start - i * 48.0) < 0.01
+                && b96.notes[(size_t) i].vel == 80 + i * 2)
+                ++match;
+        std::printf ("import plays back: %d of 16 notes identical (pitch, time, velocity)\n", match);
+        File (src).deleteFile();
+        proc->getUserMidiFolder().getChildFile ("mm_test_gminor.mid").deleteFile();
         MessageManager::getInstance()->runDispatchLoopUntil (100);
     }
 

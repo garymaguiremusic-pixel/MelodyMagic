@@ -231,17 +231,29 @@ namespace mm
             if (e.type != Event::On || chord.empty() || pattern == nullptr || id < 0 || id >= (int) pattern->offset.size())
                 continue;
 
-            const auto seq = arpSequence ((int) chord.size(), s.order);
-            const auto& key = chord[(size_t) seq[(size_t) pattern->step[(size_t) id] % seq.size()]];
-            int pitch = key.note + pattern->offset[(size_t) id];
+            int pitch, vel;
+            const HeldNote* key;
+            if (s.order == ArpOrder::Melody)
+            {
+                // the pattern's own notes, from the Key's root in the octave of the lowest held key
+                key = &chord.front();
+                pitch = 12 * floorDiv (key->note, 12) + std::clamp (s.key, 0, 11) + pattern->offset[(size_t) id];
+                vel = velocityOf (e.vel, 127, s.randomVel, rng);   // the file's / pattern's velocity
+            }
+            else
+            {
+                const auto seq = arpSequence ((int) chord.size(), s.order);
+                key = &chord[(size_t) seq[(size_t) pattern->step[(size_t) id] % seq.size()]];
+                pitch = key->note + pattern->offset[(size_t) id];
+                vel = velocityOf (e.vel, key->vel, s.randomVel, rng);
+            }
             if (s.scaleLock)
                 pitch = s.scale.quantise (pitch);
             if (pitch < 0 || pitch > 127)
                 continue;
 
-            const int vel = velocityOf (e.vel, key.vel, s.randomVel, rng);
-            out.push_back (Event::on (e.time, pitch, vel, key.channel));
-            sounding.push_back ({ id, pitch, key.channel });
+            out.push_back (Event::on (e.time, pitch, vel, key->channel));
+            sounding.push_back ({ id, pitch, key->channel });
         }
 
         std::stable_sort (out.begin() + (std::ptrdiff_t) firstOut, out.end(), [] (const Event& a, const Event& b) { return a.time < b.time; });

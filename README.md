@@ -43,7 +43,9 @@ MelodyMagic takes MIDI in and sends MIDI out; it makes no sound itself. It loads
 
 **Arp.**
 
-* **Mode** sets the order the held keys are played in: Up, Down, Up & Down, Down & Up. Each pattern note plays the next key in that order.
+* **Mode** sets how the pattern plays:
+  * **Up, Down, Up & Down, Down & Up** play the held keys in that order. Each pattern note plays the next key, plus its own offset.
+  * **Melody** works like ArpSampler's Step mode. It plays the pattern's own notes from the Key's root, and the key you hold only starts it and picks the octave: C3–B3 plays it as written, C2–B2 an octave down.
 * **Speed** runs from x1/4 to x4 of the host tempo.
 * **Rnd Vel** adds a random ± velocity.
 
@@ -59,18 +61,12 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
   * a one-bar hook repeats over each chord, moved to fit it, and an answer bar ends the phrase (4 bars = A A A B, 8 bars = A A A B A A A C);
   * rhythms come from classic trance lead rhythms (offbeat, 3-3-2, rolling, gallop and others).
   * **Density** sets how busy the rhythm is, **Range** how far the melody spreads, and **Gate** the note length.
-* **Keep Pattern** and **Keep Melody** choose what New Melody keeps:
-
-  | Keep Pattern | Keep Melody | New Melody does |
-  |---|---|---|
-  | off | off | a new rhythm and new notes |
-  | on | off | keeps the rhythm, new notes |
-  | off | on | keeps the notes (in order, bar by bar), new rhythm |
-  | on | on | a variation: bar 1 stays exactly as it is, the other bars are re-written around it |
-
-  The line under the buttons says what the next press will do.
+* **New Melody** writes new notes. The pattern (rhythm) stays exactly as it is.
+* **New Pattern** writes a new rhythm. The notes stay, in the same order.
+* On an empty pattern (after **Clear**), either button writes both.
+* Both buttons switch the Arp to **Melody** mode, so you hear the melody as written.
 * **Randomise Notes** (Library) keeps the rhythm and writes new notes.
-* **Learn File** is on once you've loaded a MIDI file. New Melody and Randomise Notes then learn from that file: its rhythm (its first bar is the hook, its last bar the answer), its intervals, its favourite notes and its range.
+* **Learn From MIDI File** is on once you've loaded a MIDI file. New Melody and Randomise Notes then learn from that file: its rhythm (its first bar is the hook, its last bar the answer), its intervals, its favourite notes and its range.
 * **Shuffle Notes** (Library) keeps the rhythm and uses exactly the imported file's notes, in new places.
 
 **Library.** It has three tabs; click an entry to load it, and with the list focused the arrow keys browse.

@@ -17,6 +17,7 @@ namespace mm
         int randomVel = 0;          // +- random velocity, 0..127
         bool scaleLock = false;     // every output note moves to the nearest scale note
         ScaleContext scale = ScaleContext::make (Major, 0);
+        int key = 0;                // Melody mode plays from this key's root
         bool bypassed = false;
     };
 

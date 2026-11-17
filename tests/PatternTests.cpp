@@ -50,6 +50,7 @@ TEST_CASE ("Arp orders", "[arp]")
     CHECK (arpSequence (1, ArpOrder::UpDown) == std::vector<int> { 0 });
     CHECK (arpSequence (2, ArpOrder::DownUp) == std::vector<int> { 1, 0 });
     CHECK (arpSequence (0, ArpOrder::Up).empty());
+    CHECK (arpSequence (3, ArpOrder::Melody) == std::vector<int> { 0 });
 }
 
 TEST_CASE ("One held key plays the pattern as a melody", "[arp]")
@@ -208,12 +209,12 @@ TEST_CASE ("Shuffle keeps the rhythm and uses exactly the file's notes", "[impor
     CHECK (got == pool);   // same notes
 }
 
-TEST_CASE ("MIDI import keeps the notes and rhythm", "[import]")
+TEST_CASE ("MIDI import keeps the notes and rhythm, and Melody mode plays them back exactly", "[import]")
 {
     MidiClip c;
     c.ppq = 480;
-    // a line in A minor starting in bar 2: A3 C4 E4 G4 (57 60 64 67)
-    c.notes = { { 57, 100, 1, 1920, 2160 }, { 60, 90, 1, 2400, 2640 }, { 64, 80, 1, 2880, 3360 }, { 67, 70, 1, 3360, 3600 } };
+    // a line in A minor starting in bar 2: A3 C4 E4 G4 (69 72 76 79)
+    c.notes = { { 69, 100, 1, 1920, 2160 }, { 72, 90, 1, 2400, 2640 }, { 76, 80, 1, 2880, 3360 }, { 79, 70, 1, 3360, 3600 } };
     std::vector<int> fileNotes;
     const auto p = patternFromMidi (c, 9, "line", &fileNotes);
     CHECK (p.bars == 1);
@@ -224,9 +225,40 @@ TEST_CASE ("MIDI import keeps the notes and rhythm", "[import]")
     CHECK (p.notes[3].offset == 10);
     CHECK (fileNotes == std::vector<int> { 0, 3, 7, 10 });
 
-    // holding the key's root plays the file's notes back
-    const auto out = render (p, { 57 }, settings());
-    CHECK (pitches (out) == std::vector<int> { 57, 60, 64, 67 });
+    // Melody mode: any key from C3 to B3 plays the file at its real pitches and velocities
+    auto s = settings (ArpOrder::Melody);
+    s.key = 9;
+    for (int held : { 60, 64, 69, 71 })
+    {
+        const auto out = render (p, { held }, s);
+        CHECK (pitches (out) == std::vector<int> { 69, 72, 76, 79 });
+        REQUIRE (out.size() == 4);
+        CHECK (out[1].vel == 90);
+    }
+    // a key in octave 2 plays it an octave down; a chord doesn't scramble it
+    CHECK (pitches (render (p, { 50 }, s)) == std::vector<int> { 57, 60, 64, 67 });
+    CHECK (pitches (render (p, { 64, 67, 71 }, s)) == std::vector<int> { 69, 72, 76, 79 });
+}
+
+TEST_CASE ("Key detection", "[import]")
+{
+    auto clipOf = [] (std::initializer_list<int> notes)
+    {
+        MidiClip c;
+        double t = 0;
+        for (int n : notes) { c.notes.push_back ({ n, 100, 1, t, t + 48 }); t += 48; }
+        return c;
+    };
+    int key = -1, scale = -1;
+    detectKey (clipOf ({ 69, 72, 76, 74, 72, 71, 69, 67, 69, 64, 69 }), key, scale);   // A minor line
+    CHECK (key == 9);
+    CHECK (scale == NaturalMinor);
+    detectKey (clipOf ({ 67, 71, 74, 72, 71, 69, 67, 66, 67, 62, 67 }), key, scale);   // G major line
+    CHECK (key == 7);
+    CHECK (scale == Major);
+    detectKey (clipOf ({ 67, 70, 74, 72, 70, 69, 67, 65, 67, 62, 67 }), key, scale);   // G minor line
+    CHECK (key == 7);
+    CHECK (scale == NaturalMinor);
 }
 
 TEST_CASE ("Library phrases become patterns", "[import]")

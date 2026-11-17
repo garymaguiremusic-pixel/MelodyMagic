@@ -72,8 +72,7 @@ private:
     VirusKnob densityKnob { VirusKnob::Size::Small, "Density" };
     VirusKnob rangeKnob   { VirusKnob::Size::Small, "Range" };
     VirusKnob gateKnob    { VirusKnob::Size::Small, "Gate" };
-    juce::TextButton newPatternButton { "New Melody" }, fileStyleButton { "Learn File" },
-                     keepPatternButton { "Keep Pattern" }, keepMelodyButton { "Keep Melody" };
+    juce::TextButton newMelodyButton { "New Melody" }, newPatternButton { "New Pattern" }, fileStyleButton { "Learn From MIDI File" };
 
     // Groove
     juce::ComboBox grooveBox;
