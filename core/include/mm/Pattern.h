@@ -59,26 +59,11 @@ namespace mm
         (key + offset) is in the scale. Kept within +-kMaxOffset. */
     int stepOffset (int offset, int direction, const ScaleContext* scale, int key);
 
-    /** Offsets in -range..+range whose note (key + offset) is in the scale. */
-    std::vector<int> scaleOffsets (const ScaleContext&, int key, int range);
-
     /** Rounds bars to 1, 2, 4 or 8. */
     int legalBars (int bars);
 
     //==============================================================================
-    // Generate / randomise (always in the scale)
-    struct GenerateSettings
-    {
-        int density = 60;   // % of 1/16 steps that play
-        int range = 12;     // semitones either side of the key
-        int gate = 60;      // % of a step a note lasts
-    };
-
-    /** A new pattern: rhythm on a 1/16 grid, accents, occasional ties, notes from the scale. */
-    Pattern generatePattern (int bars, const GenerateSettings&, const ScaleContext&, int key, Rng&);
-
-    /** Keeps the rhythm (starts, lengths, velocities) and picks new notes from the scale. */
-    void randomiseNotes (Pattern&, int range, const ScaleContext&, int key, Rng&);
+    // Shuffle
 
     /** Keeps the rhythm and moves the given notes (offsets) to new places: every note of
         'pool' is used, as many times as it appears (repeating the pool if the pattern is longer). */

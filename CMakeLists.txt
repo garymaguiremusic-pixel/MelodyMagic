@@ -27,6 +27,7 @@ add_library(mmcore STATIC
     core/src/Formats.cpp
     core/src/Json.cpp
     core/src/Library.cpp
+    core/src/Melody.cpp
     core/src/MidiFile.cpp
     core/src/Pattern.cpp
     core/src/Scales.cpp
@@ -98,7 +99,7 @@ if(MELODYMAGIC_BUILD_PLUGIN)
         NEEDS_MIDI_INPUT            TRUE
         NEEDS_MIDI_OUTPUT           TRUE
         IS_MIDI_EFFECT              FALSE
-        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
         VST3_CATEGORIES             Instrument Generator
         VST3_AUTO_MANIFEST          ${MELODYMAGIC_VST3_MANIFEST}
         COPY_PLUGIN_AFTER_BUILD     ${MELODYMAGIC_COPY_AFTER_BUILD})

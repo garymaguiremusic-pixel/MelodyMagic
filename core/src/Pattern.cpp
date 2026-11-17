@@ -62,18 +62,6 @@ namespace mm
         return std::clamp (o, -kMaxOffset, kMaxOffset);
     }
 
-    std::vector<int> scaleOffsets (const ScaleContext& scale, int key, int range)
-    {
-        std::vector<int> v;
-        range = std::clamp (range, 0, kMaxOffset);
-        for (int o = -range; o <= range; ++o)
-            if (scale.inScale (key + o))
-                v.push_back (o);
-        if (v.empty())
-            v.push_back (0);
-        return v;
-    }
-
     int legalBars (int bars)
     {
         if (bars <= 1) return 1;
@@ -83,77 +71,6 @@ namespace mm
     }
 
     //==============================================================================
-    namespace
-    {
-        constexpr int kStep = kPhrasePpq / 4;   // 1/16
-
-        /** A scale note near the previous one most of the time, so lines sound like melodies. */
-        int pickOffset (const std::vector<int>& choices, int previous, Rng& rng)
-        {
-            if (rng.chance (0.25))
-                for (int c : choices)
-                    if (c == 0)
-                        return 0;   // the root is a good home note
-            if (rng.chance (0.6))
-            {
-                std::vector<int> near;
-                for (int c : choices)
-                    if (std::abs (c - previous) <= 5)
-                        near.push_back (c);
-                if (! near.empty())
-                    return near[(size_t) rng.nextInt ((int) near.size())];
-            }
-            return choices[(size_t) rng.nextInt ((int) choices.size())];
-        }
-    }
-
-    Pattern generatePattern (int bars, const GenerateSettings& g, const ScaleContext& scale, int key, Rng& rng)
-    {
-        Pattern p;
-        p.name = "Generated";
-        p.bars = legalBars (bars);
-        const int steps = p.bars * 16;
-        const auto choices = scaleOffsets (scale, key, g.range);
-        const double density = std::clamp (g.density, 0, 100) / 100.0;
-        const int gateTicks = std::max (2, (int) std::lround (kStep * std::clamp (g.gate, 5, 100) / 100.0));
-
-        int previous = 0;
-        for (int i = 0; i < steps; ++i)
-        {
-            // downbeats play a little more often
-            const double chance = i % 4 == 0 ? std::min (1.0, density * 1.3) : density;
-            if (! rng.chance (chance))
-                continue;
-
-            PatternNote n;
-            n.start = i * kStep;
-            n.end = n.start + gateTicks;
-            if (rng.chance (0.15))   // tie into the next step
-                n.end = n.start + kStep + gateTicks;
-            n.end = std::min (n.end, p.lengthTicks());
-            n.velocity = rng.chance (0.25) ? 120 : 92;
-            n.offset = pickOffset (choices, previous, rng);
-            previous = n.offset;
-            p.notes.push_back (n);
-        }
-        if (p.notes.empty())
-            p.notes.push_back ({ 0, gateTicks, 0, 110 });
-        p.sort();
-        return p;
-    }
-
-    void randomiseNotes (Pattern& p, int range, const ScaleContext& scale, int key, Rng& rng)
-    {
-        const auto choices = scaleOffsets (scale, key, range);
-        int previous = 0;
-        p.sort();
-        for (auto& n : p.notes)
-        {
-            n.offset = pickOffset (choices, previous, rng);
-            previous = n.offset;
-        }
-    }
-
     void shuffleNotes (Pattern& p, const std::vector<int>& pool, Rng& rng)
     {
         if (pool.empty() || p.notes.empty())

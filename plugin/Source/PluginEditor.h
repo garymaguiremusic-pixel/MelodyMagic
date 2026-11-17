@@ -37,6 +37,8 @@ private:
     void updateSelectionInfo();
     void updateCustomKeys();
     void importMidi (const juce::File&);
+    void rebuildGrooveMenu();
+    void keepFocusOnNotes (juce::Component&);
     void createBackground();
     void drawWordmark (juce::Graphics&, juce::Rectangle<float> area);
 
@@ -45,7 +47,7 @@ private:
     juce::Image background;
 
     // Top bar
-    juce::TextButton undoButton { "Undo" }, redoButton { "Redo" }, importButton { "Import MIDI" }, bypassButton { "Bypass" };
+    juce::TextButton undoButton { "Undo" }, redoButton { "Redo" }, bypassButton { "Bypass" };
     DragMidiHandle dragHandle;
 
     // Pattern
@@ -64,14 +66,19 @@ private:
     juce::TextButton scaleLockButton { "Scale Lock" };
     std::array<juce::TextButton, 12> customKeys;
 
-    // Generate
+    // Melody Maker
+    juce::ComboBox progressionBox;
+    LcdDisplay chordsLcd;
     VirusKnob densityKnob { VirusKnob::Size::Small, "Density" };
     VirusKnob rangeKnob   { VirusKnob::Size::Small, "Range" };
     VirusKnob gateKnob    { VirusKnob::Size::Small, "Gate" };
-    juce::TextButton newPatternButton { "New Pattern" }, randomiseButton { "Randomise Notes" }, shuffleButton { "Shuffle File Notes" };
+    juce::TextButton newPatternButton { "New Melody" }, randomiseButton { "Randomise Notes" }, shuffleButton { "Shuffle File Notes" },
+                     fileStyleButton { "Learn File" };
 
     // Groove
-    LcdDisplay grooveLcd;
+    juce::ComboBox grooveBox;
+    std::vector<juce::String> grooveKeys;
+    std::shared_ptr<const mm::Library> grooveLibrary;
     VirusKnob qStartKnob { VirusKnob::Size::Small, "Q Start" };
     VirusKnob qEndKnob   { VirusKnob::Size::Small, "Q End" };
     juce::TextButton qLinkButton { "Link" };

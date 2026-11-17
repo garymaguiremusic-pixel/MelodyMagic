@@ -11,6 +11,8 @@
       right-click / double-click = delete,
       mouse wheel over a note = up / down a semitone (a scale note when Scale Lock is on).
     Drop a .mid file on it to import it. Drag in the lower strip for velocity.
+    Clicking it takes the keyboard focus: Up / Down move the selected note, Left / Right
+    select the previous / next note, Delete removes it, Ctrl+Z / Ctrl+Y undo / redo.
 */
 class PatternGrid : public juce::Component,
                     public juce::SettableTooltipClient,
@@ -36,6 +38,9 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    bool keyPressed (const juce::KeyPress&) override;
+    void focusGained (FocusChangeType) override   { repaint(); }
+    void focusLost (FocusChangeType) override     { repaint(); }
 
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
     void fileDragEnter (const juce::StringArray&, int, int) override   { dropHighlight = true; repaint(); }
@@ -56,6 +61,7 @@ private:
     int noteAt (juce::Point<float>) const;
     int velocityNoteAt (float x) const;
     void setVelocityFromY (int index, float y);
+    void moveSelected (int direction);
     void ensureEditStarted();
     void commit (mm::Pattern&);
     int selectAfterSort (mm::Pattern&, const mm::PatternNote&);

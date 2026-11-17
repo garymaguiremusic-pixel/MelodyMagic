@@ -5,9 +5,9 @@
 
 //==============================================================================
 /**
-    Pattern browser: library phrases, factory patterns and grooves, listed by folder.
-    A single click loads the entry. "Randomise Notes" keeps the loaded pattern's rhythm
-    and picks new notes from the Key + Scale.
+    Pattern browser: factory patterns, library phrases and My MIDI (your own MIDI files,
+    imported or saved here), listed by folder. A single click loads the entry.
+    "Randomise Notes" keeps the loaded pattern's rhythm and writes a new melody over it.
 */
 class LibraryPanel : public juce::Component
 {
@@ -20,7 +20,7 @@ public:
     void resized() override;
 
 private:
-    enum Category { Phrases = 0, Factory, Grooves, NumCategories };
+    enum Category { Factory = 0, Phrases, MyMidi, NumCategories };
 
     struct FolderModel : juce::ListBoxModel
     {
@@ -38,6 +38,7 @@ private:
         int getNumRows() override;
         void paintListBoxItem (int row, juce::Graphics&, int w, int h, bool selected) override;
         void listBoxItemClicked (int row, const juce::MouseEvent&) override;
+        void listBoxItemDoubleClicked (int, const juce::MouseEvent&) override {}
         void returnKeyPressed (int row) override;
         void selectedRowsChanged (int row) override;
     };
@@ -46,6 +47,10 @@ private:
     void rebuildKeys();
     void rebuildFiles();
     void loadEntry (int row);
+    void showItemMenu (int row);
+    juce::File userFileFor (const juce::String& key) const;
+    void importFiles();
+    void savePattern();
     juce::String currentKey() const;
 
     MelodyMagicProcessor& proc;
@@ -59,6 +64,8 @@ private:
     FileModel fileModel { *this };
     juce::ListBox folderList { "folders", &folderModel }, fileList { "files", &fileModel };
     juce::TextEditor searchBox;
-    juce::TextButton randomiseButton { "Randomise Notes" }, folderButton { "Folder..." }, rescanButton { "Rescan" }, unloadButton { "No Groove" };
+    juce::TextButton randomiseButton { "Randomise Notes" }, folderButton { "Folder..." }, rescanButton { "Rescan" },
+                     importButton { "Import..." }, saveButton { "Save..." };
     std::unique_ptr<juce::FileChooser> chooser;
+    std::unique_ptr<juce::AlertWindow> saveDialog;
 };

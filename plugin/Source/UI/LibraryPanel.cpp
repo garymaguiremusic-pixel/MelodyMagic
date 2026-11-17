@@ -16,7 +16,7 @@ namespace
 
     String folderOfKey (const String& key)   { return key.upToLastOccurrenceOf ("/", false, false); }
 
-    const char* categoryNames[] = { "Phrases", "Factory", "Grooves" };
+    const char* categoryNames[] = { "Factory", "Phrases", "My MIDI" };
 }
 
 //==============================================================================
@@ -29,9 +29,9 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
         b.onClick = [this, i] { setCategory (i); };
         addAndMakeVisible (b);
     }
-    categoryButtons[Phrases].setTooltip ("Patterns from your library folder");
     categoryButtons[Factory].setTooltip ("Built-in patterns");
-    categoryButtons[Grooves].setTooltip ("Groove patterns: set how strongly they pull the notes with Q Start / Q End");
+    categoryButtons[Phrases].setTooltip ("Patterns from your library folder");
+    categoryButtons[MyMidi].setTooltip ("Your own MIDI files: Import... adds them, Save... stores the current pattern");
 
     for (auto* list : { &folderList, &fileList })
     {
@@ -50,7 +50,7 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     searchBox.onTextChange = [this] { rebuildFiles(); };
     addAndMakeVisible (searchBox);
 
-    randomiseButton.setTooltip ("Keep the pattern's rhythm and pick new notes from the Key + Scale");
+    randomiseButton.setTooltip ("Keep the pattern's rhythm and write a new melody over it (in the Key + Scale, learning from your MIDI file)");
     randomiseButton.onClick = [this] { proc.randomiseNotes(); };
     folderButton.setTooltip ("Choose the library folder (nora_*_library.json and/or .fas / .qas files)");
     folderButton.onClick = [this]
@@ -65,11 +65,18 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
                               });
     };
     rescanButton.setTooltip ("Read the library folder again");
-    rescanButton.onClick = [this] { proc.rescanLibrary(); };
-    unloadButton.setTooltip ("Switch the groove off");
-    unloadButton.onClick = [this] { proc.setGroove (std::nullopt, {}); };
-    for (auto* b : { &randomiseButton, &folderButton, &rescanButton, &unloadButton })
+    rescanButton.onClick = [this] { if (category == MyMidi) rebuildKeys(); else proc.rescanLibrary(); };
+    importButton.setTooltip ("Add MIDI files to My MIDI (they are copied into Documents/MelodyMagic/My MIDI) and load the first");
+    importButton.onClick = [this] { importFiles(); };
+    saveButton.setTooltip ("Save the current pattern into My MIDI");
+    saveButton.onClick = [this] { savePattern(); };
+    for (auto* b : { &randomiseButton, &folderButton, &rescanButton, &importButton, &saveButton })
+    {
+        b->setWantsKeyboardFocus (false);
         addAndMakeVisible (b);
+    }
+    for (auto& b : categoryButtons)
+        b.setWantsKeyboardFocus (false);
 
     setCategory (Factory);
 }
@@ -98,7 +105,10 @@ void LibraryPanel::setCategory (int c)
     category = c;
     for (int i = 0; i < NumCategories; ++i)
         categoryButtons[(size_t) i].setToggleState (i == c, dontSendNotification);
-    unloadButton.setVisible (c == Grooves);
+    folderButton.setVisible (c == Phrases);
+    rescanButton.setVisible (c != Factory);
+    importButton.setVisible (c == MyMidi);
+    saveButton.setVisible (c == MyMidi);
     selectedFolder = {};
     lib = proc.getLibrary();
     rebuildKeys();
@@ -113,12 +123,15 @@ void LibraryPanel::rebuildKeys()
         for (auto& kv : mmp::factoryPatterns())
             allKeys.push_back (String (kv.first));
     }
+    else if (category == MyMidi)
+    {
+        const auto folder = proc.getUserMidiFolder();
+        for (const auto& entry : RangedDirectoryIterator (folder, true, "*.mid;*.midi", File::findFiles))
+            allKeys.push_back ("My MIDI/" + entry.getFile().getRelativePathFrom (folder).replaceCharacter ('\\', '/'));
+    }
     else if (lib != nullptr)
     {
-        if (category == Phrases)
-            for (auto& kv : lib->phrases) allKeys.push_back (String::fromUTF8 (kv.first.c_str()));
-        else
-            for (auto& kv : lib->grooves) allKeys.push_back (String::fromUTF8 (kv.first.c_str()));
+        for (auto& kv : lib->phrases) allKeys.push_back (String::fromUTF8 (kv.first.c_str()));
     }
 
     folders.clear();
@@ -165,7 +178,81 @@ void LibraryPanel::rebuildFiles()
 
 String LibraryPanel::currentKey() const
 {
-    return category == Grooves ? proc.getGrooveName() : proc.loadedLibraryKey;
+    return proc.loadedLibraryKey;
+}
+
+File LibraryPanel::userFileFor (const String& key) const
+{
+    return proc.getUserMidiFolder().getChildFile (key.fromFirstOccurrenceOf ("My MIDI/", false, false));
+}
+
+void LibraryPanel::importFiles()
+{
+    chooser = std::make_unique<FileChooser> ("Import MIDI files", File::getSpecialLocation (File::userDocumentsDirectory), "*.mid;*.midi");
+    chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles | FileBrowserComponent::canSelectMultipleItems,
+                          [this] (const FileChooser& fc)
+                          {
+                              const auto results = fc.getResults();
+                              if (results.isEmpty())
+                                  return;
+                              StringArray failed;
+                              for (int i = results.size(); --i >= 0;)   // the first file ends up loaded
+                              {
+                                  String error;
+                                  if (! proc.addMidiToLibrary (results[i], error))
+                                      failed.add (results[i].getFileName() + ": " + error);
+                              }
+                              setCategory (MyMidi);
+                              if (failed.size() > 0)
+                                  AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Import MIDI", failed.joinIntoString ("\n"));
+                          });
+}
+
+void LibraryPanel::savePattern()
+{
+    saveDialog = std::make_unique<AlertWindow> ("Save to My MIDI", "Name for the pattern:", MessageBoxIconType::NoIcon);
+    saveDialog->addTextEditor ("name", String (proc.getPattern().name));
+    saveDialog->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
+    saveDialog->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+    saveDialog->enterModalState (true, ModalCallbackFunction::create ([this] (int result)
+    {
+        if (result == 1 && saveDialog != nullptr)
+        {
+            const auto file = proc.savePatternToLibrary (saveDialog->getTextEditorContents ("name"));
+            if (file == File())
+                AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Save", "Could not write the file.");
+            setCategory (MyMidi);
+        }
+        saveDialog.reset();
+    }), false);
+}
+
+void LibraryPanel::showItemMenu (int row)
+{
+    if (row < 0 || row >= (int) files.size())
+        return;
+    const auto key = files[(size_t) row];
+    PopupMenu menu;
+    menu.addItem ("Load", [this, row] { loadEntry (row); });
+    if (category == MyMidi)
+    {
+        menu.addItem ("Show in folder", [this, key] { userFileFor (key).revealToUser(); });
+        menu.addSeparator();
+        menu.addItem ("Delete", [this, key]
+        {
+            AlertWindow::showOkCancelBox (MessageBoxIconType::QuestionIcon, "Delete", "Delete " + key.fromLastOccurrenceOf ("/", false, false) + "?",
+                                          "Delete", "Cancel", this,
+                                          ModalCallbackFunction::create ([this, key] (int ok)
+                                          {
+                                              if (ok != 0)
+                                              {
+                                                  userFileFor (key).moveToTrash();
+                                                  rebuildKeys();
+                                              }
+                                          }));
+        });
+    }
+    menu.showMenuAsync (PopupMenu::Options().withMousePosition());
 }
 
 void LibraryPanel::loadEntry (int row)
@@ -181,20 +268,20 @@ void LibraryPanel::loadEntry (int row)
         proc.setPattern (mmp::factoryPatterns().at (k));
         return;
     }
+    if (category == MyMidi)
+    {
+        String error;
+        if (! proc.importMidiFile (userFileFor (key), error))
+            AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Load MIDI", key + "\n" + error);
+        return;
+    }
     if (lib == nullptr)
         return;
 
-    if (category == Phrases)
+    if (auto it = lib->phrases.find (k); it != lib->phrases.end())
     {
-        if (auto it = lib->phrases.find (k); it != lib->phrases.end())
-        {
-            proc.loadedLibraryKey = key;
-            proc.setPattern (mm::patternFromPhrase (it->second));
-        }
-    }
-    else if (auto it = lib->grooves.find (k); it != lib->grooves.end())
-    {
-        proc.setGroove (it->second, key);
+        proc.loadedLibraryKey = key;
+        proc.setPattern (mm::patternFromPhrase (it->second));
     }
 }
 
@@ -251,7 +338,14 @@ void LibraryPanel::FileModel::paintListBoxItem (int row, Graphics& g, int w, int
     }
 }
 
-void LibraryPanel::FileModel::listBoxItemClicked (int row, const MouseEvent&)   { owner.loadEntry (row); owner.fileList.repaint(); }
+void LibraryPanel::FileModel::listBoxItemClicked (int row, const MouseEvent& e)
+{
+    if (e.mods.isPopupMenu())
+        owner.showItemMenu (row);
+    else
+        owner.loadEntry (row);
+    owner.fileList.repaint();
+}
 void LibraryPanel::FileModel::returnKeyPressed (int row)                        { owner.loadEntry (row); owner.fileList.repaint(); }
 
 void LibraryPanel::FileModel::selectedRowsChanged (int row)
@@ -272,8 +366,10 @@ void LibraryPanel::paint (Graphics& g)
     String status;
     if (proc.isLibraryLoading())
         status = "Loading library...";
-    else if (category != Factory && allKeys.empty())
-        status = "Empty: click Folder... and choose the folder holding nora_*_library.json (or .fas / .qas files)";
+    else if (category == Phrases && allKeys.empty())
+        status = "Empty: click Folder... and choose the folder holding nora_fas_library.json (or .fas files)";
+    else if (category == MyMidi && allKeys.empty())
+        status = "No MIDI yet: Import... adds .mid files, Save... stores the current pattern (right-click an entry to delete it)";
     else
         status = String ((int) files.size()) + " of " + String ((int) allKeys.size());
 
@@ -292,15 +388,12 @@ void LibraryPanel::resized()
         b.setBounds (top.removeFromLeft (78));
         top.removeFromLeft (4);
     }
-    rescanButton.setBounds (top.removeFromRight (60));
-    top.removeFromRight (4);
-    folderButton.setBounds (top.removeFromRight (70));
-    top.removeFromRight (4);
-    if (unloadButton.isVisible())
-    {
-        unloadButton.setBounds (top.removeFromRight (78));
-        top.removeFromRight (4);
-    }
+    for (auto* b : { &rescanButton, &folderButton, &saveButton, &importButton })
+        if (b->isVisible())
+        {
+            b->setBounds (top.removeFromRight (b == &folderButton ? 70 : 64));
+            top.removeFromRight (4);
+        }
     randomiseButton.setBounds (top.removeFromRight (128));
 
     area.removeFromTop (6);

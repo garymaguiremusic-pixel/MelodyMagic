@@ -2,6 +2,8 @@
 //   MelodyMagicScreenshot <out.png> [libraryFolder]
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "mm/MidiFile.h"
+#include <cstdlib>
 
 using namespace juce;
 
@@ -35,6 +37,11 @@ int main (int argc, char** argv)
     }
 
     MessageManager::getInstance()->runDispatchLoopUntil (1500);   // library loads in the background
+    {
+        auto pt = proc->getPattern();
+        pt.bars = 4;
+        proc->setPattern (pt);
+    }
     proc->generateNewPattern();
     std::unique_ptr<AudioProcessorEditor> editor (proc->createEditor());
     editor->setSize (MelodyMagicPanel::kBaseWidth, MelodyMagicPanel::kBaseHeight);
@@ -56,6 +63,31 @@ int main (int argc, char** argv)
         const bool same = copy.getPattern() == proc->getPattern()
                        && copy.apvts.getRawParameterValue (mmp::ParamIDs::scaleKey)->load() == 9.0f;
         std::printf ("state round trip: %s (%d bytes)\n", same ? "OK" : "MISMATCH", (int) state.getSize());
+    }
+
+    // My MIDI: import a file, learn from it, randomise with its style, save
+    if (std::getenv ("MM_TEST_IMPORT") != nullptr)
+    {
+        mm::MidiClip clip;
+        clip.ppq = 96;
+        const int line[] = { 69, 72, 76, 74, 72, 71, 69, 64 };
+        for (int b = 0; b < 2; ++b)
+            for (int i = 0; i < 8; ++i)
+                clip.notes.push_back ({ line[(i + b) % 8], 100, 1, b * 384.0 + i * 48.0, b * 384.0 + i * 48.0 + 36.0 });
+        const auto src = File::getSpecialLocation (File::tempDirectory).getChildFile ("mm_test_line.mid");
+        mm::writeMidiFile (src.getFullPathName().toStdString(), clip);
+        String error;
+        const bool ok = proc->addMidiToLibrary (src, error);
+        std::printf ("import: %s %s, file style %s, %d notes, key %s\n", ok ? "OK" : "FAILED", error.toRawUTF8(),
+                     proc->fileStyleActive() ? "on" : "off", proc->numFileNotes(), proc->loadedLibraryKey.toRawUTF8());
+        proc->randomiseNotes();
+        String notes;
+        for (auto& n : proc->getPattern().notes)
+            notes << mm::keyName (9 + n.offset) << "@" << n.start / 24 << " ";
+        std::printf ("randomised with file style: %s\n", notes.toRawUTF8());
+        const auto saved = proc->savePatternToLibrary ("Test Save");
+        std::printf ("saved: %s\n", saved.getFullPathName().toRawUTF8());
+        MessageManager::getInstance()->runDispatchLoopUntil (100);
     }
 
     const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 2.0f);

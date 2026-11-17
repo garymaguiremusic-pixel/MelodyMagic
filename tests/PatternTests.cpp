@@ -186,54 +186,6 @@ TEST_CASE ("Mouse wheel steps: semitones, or scale notes with a scale", "[edit]"
     CHECK (stepOffset (kMaxOffset, 1, nullptr, 0) == kMaxOffset);
 }
 
-TEST_CASE ("Generated patterns are in the scale and inside the length", "[generate][scalelock]")
-{
-    const auto scale = ScaleContext::make (Phrygian, 7);
-    for (std::int64_t seed : { 1, 2, 3, 42 })
-    {
-        JuceLcg r (seed);
-        GenerateSettings g;
-        g.range = 12;
-        const auto p = generatePattern (2, g, scale, 7, r);
-        CHECK (p.bars == 2);
-        REQUIRE (! p.notes.empty());
-        for (auto& n : p.notes)
-        {
-            CHECK (scale.inScale (7 + n.offset));
-            CHECK (std::abs (n.offset) <= 12);
-            CHECK (n.start % 24 == 0);
-            CHECK (n.end > n.start);
-            CHECK (n.end <= 768);
-        }
-    }
-    JuceLcg a (9), b (9);
-    CHECK (generatePattern (1, {}, scale, 7, a) == generatePattern (1, {}, scale, 7, b));
-
-    GenerateSettings full;
-    full.density = 100;
-    JuceLcg r (4);
-    CHECK (generatePattern (1, full, scale, 7, r).notes.size() == 16);
-}
-
-TEST_CASE ("Randomise notes keeps the rhythm and stays in the scale", "[generate][scalelock]")
-{
-    Pattern p = steps ({ 0, 1, 2, 3, 4, 5, 6, 7 }, 48, 30);
-    p.notes[3].velocity = 55;
-    const auto before = p;
-    const auto scale = ScaleContext::make (Blues, 2);
-    JuceLcg r (5);
-    randomiseNotes (p, 7, scale, 2, r);
-    REQUIRE (p.notes.size() == before.notes.size());
-    for (size_t i = 0; i < p.notes.size(); ++i)
-    {
-        CHECK (p.notes[i].start == before.notes[i].start);
-        CHECK (p.notes[i].end == before.notes[i].end);
-        CHECK (p.notes[i].velocity == before.notes[i].velocity);
-        CHECK (scale.inScale (2 + p.notes[i].offset));
-        CHECK (std::abs (p.notes[i].offset) <= 7);
-    }
-}
-
 TEST_CASE ("Shuffle keeps the rhythm and uses exactly the file's notes", "[import]")
 {
     Pattern p = steps ({ 0, 3, 7, 10, 12, 3 });

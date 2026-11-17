@@ -11,9 +11,9 @@ namespace
     const Rectangle<float> patternArea  { 8.0f, 50.0f, 684.0f, 356.0f };
     const Rectangle<int>   libraryArea  { 8, 412, 684, 188 };
     const Rectangle<float> arpArea      { 700.0f, 50.0f, 292.0f, 112.0f };
-    const Rectangle<float> scaleArea    { 700.0f, 168.0f, 292.0f, 128.0f };
-    const Rectangle<float> generateArea { 700.0f, 302.0f, 292.0f, 176.0f };
-    const Rectangle<float> grooveArea   { 700.0f, 484.0f, 292.0f, 116.0f };
+    const Rectangle<float> scaleArea    { 700.0f, 168.0f, 292.0f, 112.0f };
+    const Rectangle<float> generateArea { 700.0f, 286.0f, 292.0f, 216.0f };
+    const Rectangle<float> grooveArea   { 700.0f, 508.0f, 292.0f, 92.0f };
 
     const int snapTicks[] = { 96, 48, 24, 12, 32, 16 };
     const char* snapNames[] = { "1/4", "1/8", "1/16", "1/32", "1/8 T", "1/16 T" };
@@ -25,14 +25,15 @@ namespace
             "Hold a key or a chord: MelodyMagic plays the pattern with it. One key plays the pattern as a melody; a chord is arpeggiated.",
             "ARP MODE:  the order the held keys are played in: Up, Down, Up & Down, Down & Up. Each pattern note plays the next key.",
             "PATTERN:  click to add a note, drag to move, drag the right edge for length, right-click / double-click to delete, Alt = no snap.",
-            "MOUSE WHEEL over a note moves it up / down a semitone (to the next scale note when Scale Lock is on).",
+            "MOUSE WHEEL over a note (or Up / Down after clicking the pattern) moves it a semitone (a scale note with Scale Lock on).",
+            "Clicking the pattern gives it the keyboard: Left / Right select notes, Delete removes, Ctrl+Z undo. Click the Library to browse with the arrows.",
             "Rows show the notes when you hold the KEY's root; other keys move the whole pattern. Drag in the lower strip for velocity.",
             "SCALE LOCK:  every note sent (live and Drag MIDI) moves to the nearest note of KEY + SCALE.",
-            "NEW PATTERN:  a new rhythm and notes, always in KEY + SCALE (Density, Range, Gate).",
-            "RANDOMISE NOTES:  keeps the rhythm, picks new notes from KEY + SCALE (also in the Library).",
-            "IMPORT MIDI (or drop a .mid on the pattern):  the file's notes and rhythm become the pattern.",
-            "SHUFFLE FILE NOTES:  keeps that rhythm and uses exactly the file's notes, in new places.",
-            "GROOVE:  pick one in Library > Grooves; Q Start / Q End pull note starts / ends onto it.",
+            "MELODY MAKER:  NEW MELODY writes a trance lead over CHORDS: chord tones on the beats, a hook that repeats and an answer bar.",
+            "RANDOMISE NOTES keeps the rhythm and writes a new melody over it.  LEARN FROM FILE: copy the imported file's rhythm and style.",
+            "MY MIDI (Library):  Import... adds .mid files, Save... stores the pattern. Dropping a .mid on the pattern imports it too.",
+            "SHUFFLE FILE NOTES:  keeps the rhythm and uses exactly the file's notes, in new places.",
+            "GROOVE:  pick a groove preset; Q Start / Q End pull note starts / ends onto it.",
             "DRAG MIDI:  drag the blue grip onto a DAW track (the last chord you played, at least 4 bars).",
             "With the DAW stopped, the pattern starts when you press a key. Knobs move in steps of 1 (drag or mouse wheel).",
             "",
@@ -54,16 +55,9 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     // Top bar ---------------------------------------------------------------------
     undoButton.setTooltip ("Undo the last pattern change");
     redoButton.setTooltip ("Redo");
-    importButton.setTooltip ("Import a MIDI file: its notes and rhythm become the pattern (you can also drop a .mid on the pattern)");
     undoButton.onClick = [this] { processor.undo(); };
     redoButton.onClick = [this] { processor.redo(); };
-    importButton.onClick = [this]
-    {
-        chooser = std::make_unique<FileChooser> ("Import MIDI file", File::getSpecialLocation (File::userDocumentsDirectory), "*.mid;*.midi");
-        chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
-                              [this] (const FileChooser& fc) { if (fc.getResult().existsAsFile()) importMidi (fc.getResult()); });
-    };
-    for (auto* b : { &undoButton, &redoButton, &importButton })
+    for (auto* b : { &undoButton, &redoButton })
         addAndMakeVisible (b);
     attachToggle (bypassButton, mmp::ParamIDs::bypassed, "Bypass: MIDI passes through untouched");
 
@@ -134,25 +128,49 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
         addChildComponent (k);
     }
 
-    // Generate --------------------------------------------------------------------------
+    // Melody Maker -------------------------------------------------------------------------
+    setupCombo (progressionBox, mmp::getProgressionNames(),
+                "The chords the melody is written over (scale degrees, one chord per bar).\n"
+                "In A minor: 1 - 6 - 3 - 7 = Am F C G. Auto = the classic trance progression for the scale.");
+    attachCombo (progressionBox, mmp::ParamIDs::genProgression);
+    chordsLcd.setTooltip ("The chords in your Key + Scale");
+    addAndMakeVisible (chordsLcd);
     attachKnob (densityKnob, mmp::ParamIDs::genDensity, [] (double v) { return String (roundToInt (v)) + " %"; },
-                "New Pattern: how many 1/16 steps play");
-    attachKnob (rangeKnob, mmp::ParamIDs::genRange, [] (double v) { return "+/- " + String (roundToInt (v)) + " st"; },
-                "New Pattern and Randomise Notes: how far notes go from the key's root, in semitones");
+                "How busy the melody's rhythm is");
+    attachKnob (rangeKnob, mmp::ParamIDs::genRange, [] (double v) { return String (roundToInt (v)) + " st"; },
+                "How far the melody spreads, in semitones");
     attachKnob (gateKnob, mmp::ParamIDs::genGate, [] (double v) { return String (roundToInt (v)) + " %"; },
-                "New Pattern: note length, as a share of a 1/16 step");
-    newPatternButton.setTooltip ("A new pattern: rhythm and notes, always in the Key + Scale");
-    randomiseButton.setTooltip ("Keep the rhythm, pick new notes from the Key + Scale");
+                "Note length (100 % = legato)");
+    newPatternButton.setTooltip ("Write a new melody: rhythm and notes, over the chords, always in the Key + Scale");
+    randomiseButton.setTooltip ("Keep the rhythm and write a new melody over it");
     shuffleButton.setTooltip ("Keep the rhythm and use exactly the imported MIDI file's notes, in new places");
-    newPatternButton.onClick = [this] { processor.generateNewPattern(); };
-    randomiseButton.onClick = [this] { processor.randomiseNotes(); };
-    shuffleButton.onClick = [this] { processor.shuffleFileNotes(); };
-    for (auto* b : { &newPatternButton, &randomiseButton, &shuffleButton })
+    fileStyleButton.setTooltip ("Learn from the imported MIDI file: its rhythm, intervals, favourite notes and range");
+    fileStyleButton.setClickingTogglesState (true);
+    newPatternButton.onClick = [this] { processor.generateNewPattern(); grid.grabKeyboardFocus(); };
+    randomiseButton.onClick = [this] { processor.randomiseNotes(); grid.grabKeyboardFocus(); };
+    shuffleButton.onClick = [this] { processor.shuffleFileNotes(); grid.grabKeyboardFocus(); };
+    fileStyleButton.onClick = [this] { processor.useFileStyle = fileStyleButton.getToggleState(); updateFromModel(); };
+    for (auto* b : { &newPatternButton, &randomiseButton, &shuffleButton, &fileStyleButton })
         addAndMakeVisible (b);
 
     // Groove ----------------------------------------------------------------------------
-    grooveLcd.setTooltip ("Groove (Library > Grooves)");
-    addAndMakeVisible (grooveLcd);
+    grooveBox.setTooltip ("Groove preset: Q Start / Q End pull the notes onto it");
+    grooveBox.setTextWhenNothingSelected ("No Groove");
+    grooveBox.onChange = [this]
+    {
+        if (updating) return;
+        const int id = grooveBox.getSelectedId();
+        if (id <= 1 || grooveLibrary == nullptr)
+        {
+            processor.setGroove (std::nullopt, {});
+            return;
+        }
+        const auto index = (size_t) (id - 2);
+        if (index < grooveKeys.size())
+            if (auto it = grooveLibrary->grooves.find (grooveKeys[index].toStdString()); it != grooveLibrary->grooves.end())
+                processor.setGroove (it->second, grooveKeys[index]);
+    };
+    addAndMakeVisible (grooveBox);
     attachKnob (qStartKnob, mmp::ParamIDs::quantizeStart, [] (double v) { return String (roundToInt (v)) + " %"; },
                 "How far note starts move onto the groove");
     attachKnob (qEndKnob, mmp::ParamIDs::quantizeEnd, [] (double v) { return String (roundToInt (v)) + " %"; },
@@ -166,9 +184,52 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     addAndMakeVisible (helpButton);
     addChildComponent (helpOverlay);
 
+    // only the pattern and the library lists take the keyboard
+    for (auto* c : getChildren())
+        if (c != &grid && c != &libraryPanel)
+            keepFocusOnNotes (*c);
+
     processor.addChangeListener (this);
     updateFromModel();
     startTimerHz (8);
+}
+
+void MelodyMagicPanel::keepFocusOnNotes (Component& c)
+{
+    c.setWantsKeyboardFocus (false);
+    c.setMouseClickGrabsKeyboardFocus (false);
+    for (auto* child : c.getChildren())
+        keepFocusOnNotes (*child);
+}
+
+void MelodyMagicPanel::rebuildGrooveMenu()
+{
+    const ScopedValueSetter<bool> svs (updating, true);
+    grooveLibrary = processor.getLibrary();
+    grooveKeys.clear();
+    grooveBox.clear (dontSendNotification);
+
+    auto* menu = grooveBox.getRootMenu();
+    menu->addItem (1, "No Groove");
+    if (grooveLibrary != nullptr && ! grooveLibrary->grooves.empty())
+    {
+        // one sub-menu per folder (MPC, SP1200, Swing...)
+        std::map<String, PopupMenu> folders;
+        for (auto& kv : grooveLibrary->grooves)
+        {
+            const auto key = String::fromUTF8 (kv.first.c_str());
+            grooveKeys.push_back (key);
+            auto folder = key.upToLastOccurrenceOf ("/", false, false).fromLastOccurrenceOf ("/", false, false);
+            auto name = key.fromLastOccurrenceOf ("/", false, false).upToLastOccurrenceOf (".", false, false);
+            folders[folder.isEmpty() ? String ("Grooves") : folder].addItem ((int) grooveKeys.size() + 1, name);
+        }
+        for (auto& [folder, sub] : folders)
+            menu->addSubMenu (folder, sub);
+    }
+    else
+    {
+        menu->addItem (-1, "(no grooves: set the Library folder)", false);
+    }
 }
 
 MelodyMagicPanel::~MelodyMagicPanel()
@@ -242,11 +303,18 @@ void MelodyMagicPanel::updateFromModel()
     updateSelectionInfo();
     libraryPanel.refresh();
 
-    String grooveText ("Library > Grooves");
-    if (const auto& gr = processor.getGroove())
-        grooveText = gr->name.empty() ? processor.getGrooveName().fromLastOccurrenceOf ("/", false, false) : String (gr->name);
-    grooveLcd.setContent (processor.getGroove() ? "GROOVE" : "NO GROOVE", grooveText);
-    grooveLcd.setDimmed (! processor.getGroove());
+    if (processor.getLibrary() != grooveLibrary)
+        rebuildGrooveMenu();
+    int grooveId = 1;
+    for (size_t i = 0; i < grooveKeys.size(); ++i)
+        if (grooveKeys[i] == processor.getGrooveName())
+            grooveId = (int) i + 2;
+    grooveBox.setSelectedId (grooveId, dontSendNotification);
+
+    const bool hasFile = fileNotes > 0;
+    fileStyleButton.setEnabled (hasFile);
+    fileStyleButton.setToggleState (processor.fileStyleActive(), dontSendNotification);
+    chordsLcd.setContent (processor.describeChords(), {});
 
     updateCustomKeys();
     repaint (patternArea.toNearestInt());
@@ -292,6 +360,7 @@ void MelodyMagicPanel::timerCallback()
         lastLock = lock;
         updateCustomKeys();
         updateSelectionInfo();
+        chordsLcd.setContent (processor.describeChords(), {});
         grid.repaint();
         repaint (scaleArea.toNearestInt());
     }
@@ -303,10 +372,9 @@ void MelodyMagicPanel::timerCallback()
 void MelodyMagicPanel::resized()
 {
     // top bar
-    undoButton.setBounds (330, 9, 60, 26);
-    redoButton.setBounds (394, 9, 60, 26);
-    importButton.setBounds (466, 9, 104, 26);
-    bypassButton.setBounds (582, 9, 72, 26);
+    undoButton.setBounds (330, 9, 64, 26);
+    redoButton.setBounds (400, 9, 64, 26);
+    bypassButton.setBounds (480, 9, 76, 26);
     dragHandle.setBounds (790, 7, 194, 30);
 
     // pattern
@@ -325,23 +393,26 @@ void MelodyMagicPanel::resized()
     // scale lock
     keyBox.setBounds (744, 192, 62, 22);
     scaleBox.setBounds (858, 192, 126, 22);
-    scaleLockButton.setBounds (708, 222, 276, 26);
+    scaleLockButton.setBounds (708, 220, 276, 26);
     for (int i = 0; i < 12; ++i)
-        customKeys[(size_t) i].setBounds (708 + i * 23, 258, 22, 20);
+        customKeys[(size_t) i].setBounds (708 + i * 23, 252, 22, 20);
 
-    // generate
-    densityKnob.setBounds (716, 324, 64, 66);
-    rangeKnob.setBounds (810, 324, 64, 66);
-    gateKnob.setBounds (904, 324, 64, 66);
-    newPatternButton.setBounds (708, 396, 276, 26);
-    randomiseButton.setBounds (708, 428, 136, 24);
-    shuffleButton.setBounds (848, 428, 136, 24);
+    // melody maker
+    progressionBox.setBounds (764, 310, 220, 22);
+    chordsLcd.setBounds (708, 338, 276, 22);
+    densityKnob.setBounds (716, 364, 64, 64);
+    rangeKnob.setBounds (810, 364, 64, 64);
+    gateKnob.setBounds (904, 364, 64, 64);
+    newPatternButton.setBounds (708, 434, 168, 26);
+    fileStyleButton.setBounds (880, 434, 104, 26);
+    randomiseButton.setBounds (708, 466, 136, 24);
+    shuffleButton.setBounds (848, 466, 136, 24);
 
     // groove
-    grooveLcd.setBounds (708, 506, 276, 22);
-    qStartKnob.setBounds (712, 532, 62, 62);
-    qEndKnob.setBounds (782, 532, 62, 62);
-    qLinkButton.setBounds (862, 552, 70, 24);
+    grooveBox.setBounds (708, 532, 170, 22);
+    qLinkButton.setBounds (708, 564, 70, 24);
+    qStartKnob.setBounds (868, 526, 60, 66);
+    qEndKnob.setBounds (926, 526, 60, 66);
 
     monitor.setBounds (8, 606, 984, 34);
     helpButton.setBounds (kWidth - 34, kBottomBarY + 6, 22, 22);
@@ -388,13 +459,16 @@ void MelodyMagicPanel::paint (Graphics& g)
         g.setFont (CustomLookAndFeel::uiFont (10.0f));
         g.setColour (VirusColours::labelText.withAlpha (0.75f));
         g.drawFittedText ("Locks every note sent, live and Drag MIDI, to the key",
-                          Rectangle<int> (708, 256, 276, 22), Justification::centred, 1, 0.8f);
+                          Rectangle<int> (708, 250, 276, 22), Justification::centred, 1, 0.8f);
     }
 
-    CustomLookAndFeel::drawPanel (g, generateArea, "Generate");
+    const String style = processor.fileStyleActive() ? "Style: " + processor.getFileName().upToLastOccurrenceOf (".", false, true)
+                                                     : String ("Style: Classic Trance");
+    CustomLookAndFeel::drawPanel (g, generateArea, "Melody Maker");
+    CustomLookAndFeel::drawSmallLabel (g, "Chords", { 708.0f, 310.0f, 54.0f, 22.0f }, Justification::centredLeft);
     g.setFont (CustomLookAndFeel::uiFont (10.0f));
-    g.setColour (VirusColours::labelText.withAlpha (0.75f));
-    g.drawFittedText ("Always in the Key + Scale", Rectangle<int> (708, 455, 276, 18), Justification::centred, 1, 0.8f);
+    g.setColour (processor.fileStyleActive() ? VirusColours::blue : VirusColours::labelText.withAlpha (0.75f));
+    g.drawFittedText (style, Rectangle<int> (708, 491, 276, 10), Justification::centred, 1, 0.8f);
 
     CustomLookAndFeel::drawPanel (g, grooveArea, "Groove");
 

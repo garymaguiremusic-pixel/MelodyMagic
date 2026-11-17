@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "mm/Melody.h"
 #include "mm/Pattern.h"
 #include "mm/Scales.h"
 
@@ -24,6 +25,7 @@ namespace mmp
         inline constexpr const char* genDensity     = "Gen_Density";
         inline constexpr const char* genRange       = "Gen_Range";
         inline constexpr const char* genGate        = "Gen_Gate";
+        inline constexpr const char* genProgression = "Gen_Progression";
     }
 
     inline juce::StringArray getModeNames()
@@ -41,6 +43,14 @@ namespace mmp
         return v[juce::jlimit (0, 9, index)];
     }
     inline constexpr int kDefaultSpeed = 5;
+
+    inline juce::StringArray getProgressionNames()
+    {
+        juce::StringArray s;
+        for (auto& n : mm::progressionNames())
+            s.add (juce::String (n));
+        return s;
+    }
 
     inline juce::StringArray getKeyNames()
     {
@@ -91,9 +101,10 @@ namespace mmp
         choice  (ParamIDs::scaleKey,      "Scale Key", getKeyNames(), 0);
         choice  (ParamIDs::scaleIndex,    "Scale", getScaleNames(), 0);
         toggle  (ParamIDs::scaleLock,     "Scale Lock", false);
-        integer (ParamIDs::genDensity,    "Generate Density", 0, 100, 60, " %");
-        integer (ParamIDs::genRange,      "Generate Range", 0, 24, 12, " st");
-        integer (ParamIDs::genGate,       "Generate Gate", 5, 100, 60, " %");
+        integer (ParamIDs::genDensity,    "Melody Density", 0, 100, 60, " %");
+        integer (ParamIDs::genRange,      "Melody Range", 5, 24, 14, " st");
+        integer (ParamIDs::genGate,       "Melody Gate", 10, 100, 80, " %");
+        choice  (ParamIDs::genProgression, "Melody Chords", getProgressionNames(), 0);
         return layout;
     }
 }

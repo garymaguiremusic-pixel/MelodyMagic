@@ -7,7 +7,10 @@ PatternGrid::PatternGrid (MelodyMagicProcessor& p) : proc (p)
 {
     setTooltip ("Click: add a note.  Drag: move.  Drag the right edge: length.  Alt: no snap.\n"
                 "Mouse wheel over a note: up / down a semitone (a scale note with Scale Lock on).\n"
-                "Right-click or double-click: delete.  Drop a .mid file here to import it.");
+                "Right-click or double-click: delete.  Drop a .mid file here to import it.\n"
+                "Keys: Up / Down move the selected note, Left / Right select, Delete removes it.");
+    setWantsKeyboardFocus (true);
+    setMouseClickGrabsKeyboardFocus (true);
     computeRange();
     startTimerHz (30);
 }
@@ -184,6 +187,11 @@ void PatternGrid::paint (Graphics& g)
         g.drawText ("Click to add notes, press New Pattern, pick one in the Library, or drop a MIDI file here",
                     gridArea, Justification::centred);
     }
+    if (hasKeyboardFocus (false))
+    {
+        g.setColour (VirusColours::blue.withAlpha (0.7f));
+        g.drawRoundedRectangle (gridArea.expanded (2.0f), 3.0f, 1.5f);
+    }
     if (dropHighlight)
     {
         g.setColour (VirusColours::blue.withAlpha (0.25f));
@@ -244,6 +252,7 @@ void PatternGrid::mouseMove (const MouseEvent& e)
 
 void PatternGrid::mouseDown (const MouseEvent& e)
 {
+    grabKeyboardFocus();
     editStarted = false;
     drag = Drag::None;
     auto p = proc.getPattern();
@@ -385,19 +394,70 @@ void PatternGrid::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& 
     const float dir = (wheel.isReversed ? -1.0f : 1.0f) * (std::abs (wheel.deltaY) > 0.0f ? wheel.deltaY : wheel.deltaX);
     if (std::abs (dir) < 1.0e-6f)
         return;
+    selected = i;
+    moveSelected (dir > 0.0f ? 1 : -1);
+}
 
+void PatternGrid::moveSelected (int direction)
+{
     auto p = proc.getPattern();
+    if (selected < 0 || selected >= (int) p.notes.size())
+        return;
     const auto scale = proc.currentScale();
-    auto n = p.notes[(size_t) i];
-    n.offset = mm::stepOffset (n.offset, dir > 0.0f ? 1 : -1, proc.scaleLockOn() ? &scale : nullptr, proc.currentKey());
-    if (n == p.notes[(size_t) i])
+    auto n = p.notes[(size_t) selected];
+    n.offset = mm::stepOffset (n.offset, direction, proc.scaleLockOn() ? &scale : nullptr, proc.currentKey());
+    if (n == p.notes[(size_t) selected])
         return;
     proc.beginEdit();
-    p.notes[(size_t) i] = n;
+    p.notes[(size_t) selected] = n;
     selected = selectAfterSort (p, n);
     commit (p);
     computeRange();
     if (onSelectionChanged) onSelectionChanged();
+}
+
+bool PatternGrid::keyPressed (const KeyPress& key)
+{
+    const int count = (int) proc.getPattern().notes.size();
+    const auto code = key.getKeyCode();
+    const bool cmd = key.getModifiers().isCommandDown();
+
+    if (cmd && code == 'Z')
+    {
+        key.getModifiers().isShiftDown() ? proc.redo() : proc.undo();
+        return true;
+    }
+    if (cmd && code == 'Y')
+    {
+        proc.redo();
+        return true;
+    }
+    if (code == KeyPress::upKey || code == KeyPress::downKey)
+    {
+        moveSelected (code == KeyPress::upKey ? 1 : -1);
+        return true;
+    }
+    if (code == KeyPress::leftKey || code == KeyPress::rightKey)
+    {
+        if (count > 0)
+        {
+            selected = selected < 0 ? 0 : jlimit (0, count - 1, selected + (code == KeyPress::rightKey ? 1 : -1));
+            repaint();
+            if (onSelectionChanged) onSelectionChanged();
+        }
+        return true;
+    }
+    if ((code == KeyPress::deleteKey || code == KeyPress::backspaceKey) && selected >= 0 && selected < count)
+    {
+        auto p = proc.getPattern();
+        proc.beginEdit();
+        p.notes.erase (p.notes.begin() + selected);
+        selected = jmin (selected, (int) p.notes.size() - 1);
+        commit (p);
+        if (onSelectionChanged) onSelectionChanged();
+        return true;
+    }
+    return false;
 }
 
 void PatternGrid::setVelocityFromY (int index, float y)

@@ -6,6 +6,7 @@
 #include "Parameters.h"
 #include "mm/ArpProcessor.h"
 #include "mm/Library.h"
+#include "mm/Melody.h"
 #include "mm/Pattern.h"
 
 #include <array>
@@ -70,15 +71,26 @@ public:
     void undo();
     void redo();
 
-    // Generate (always in the Key + Scale)
-    void generateNewPattern();
-    void randomiseNotes();          // keeps the pattern, new notes from the scale
-    void shuffleFileNotes();        // keeps the pattern, moves the MIDI file's notes around
-    int numFileNotes() const noexcept               { return (int) fileNotes.size(); }
+    // Melody Maker (always in the Key + Scale)
+    void generateNewPattern();      // a new melody: rhythm and notes
+    void randomiseNotes();          // keeps the rhythm, writes a new melody over it
+    void shuffleFileNotes();        // keeps the rhythm, moves the MIDI file's notes around
+    int numFileNotes() const noexcept               { return (int) filePattern.notes.size(); }
     const juce::String& getFileName() const noexcept { return fileName; }
+    /** Learn from the imported MIDI file (rhythm, intervals, notes, range). */
+    bool useFileStyle = true;
+    bool fileStyleActive() const noexcept           { return useFileStyle && ! filePattern.notes.empty(); }
+    /** The chords the melody is written over, e.g. "Am  F  C  G". */
+    juce::String describeChords() const;
 
-    /** Imports a MIDI file: its notes and rhythm become the pattern. */
+    // My MIDI: the user's own MIDI patterns (Documents/MelodyMagic/My MIDI)
+    juce::File getUserMidiFolder() const;
+    /** Loads a MIDI file: its notes and rhythm become the pattern, and the Melody Maker learns from it. */
     bool importMidiFile (const juce::File&, juce::String& error);
+    /** Copies a MIDI file into My MIDI, then loads it. */
+    bool addMidiToLibrary (const juce::File&, juce::String& error);
+    /** Saves the pattern into My MIDI as a .mid (played from the key's root). */
+    juce::File savePatternToLibrary (const juce::String& name);
 
     // Groove
     void setGroove (std::optional<mm::Groove>, const juce::String& name);
@@ -118,6 +130,8 @@ private:
     void loadGlobalSettings();
     void saveGlobalSettings();
     mm::ArpSettings readSettings() const;
+    mm::MelodySettings melodySettings() const;
+    mm::MelodyStyle melodyStyle() const;
     int param (const char* id) const;
 
     // model
@@ -125,7 +139,7 @@ private:
     std::vector<mm::Pattern> undoStack, redoStack;
     std::optional<mm::Groove> groove;
     juce::String grooveName;
-    std::vector<int> fileNotes;   // offsets of the imported MIDI file's notes
+    mm::Pattern filePattern;      // the imported MIDI file, as loaded
     juce::String fileName;
     std::atomic<std::uint16_t> customMask { 0x0fff };
     int lastQStart = -1, lastQEnd = -1, lastQLink = -1;

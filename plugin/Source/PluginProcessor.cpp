@@ -272,14 +272,37 @@ void MelodyMagicProcessor::timerCallback()
 //==============================================================================
 // Generate
 //==============================================================================
+mm::MelodySettings MelodyMagicProcessor::melodySettings() const
+{
+    mm::MelodySettings m;
+    m.progression = param (mmp::ParamIDs::genProgression);
+    m.density = param (mmp::ParamIDs::genDensity);
+    m.range = param (mmp::ParamIDs::genRange);
+    m.gate = param (mmp::ParamIDs::genGate);
+    return m;
+}
+
+mm::MelodyStyle MelodyMagicProcessor::melodyStyle() const
+{
+    const auto scale = currentScale();
+    return fileStyleActive() ? mm::styleFromPattern (filePattern, scale, currentKey())
+                             : mm::defaultMelodyStyle (scale);
+}
+
+String MelodyMagicProcessor::describeChords() const
+{
+    const auto scale = currentScale();
+    const int key = currentKey();
+    StringArray names;
+    for (int d : mm::progressionDegrees (param (mmp::ParamIDs::genProgression), scale, key))
+        names.add (mm::chordName (d, scale, key));
+    return names.joinIntoString ("  ");
+}
+
 void MelodyMagicProcessor::generateNewPattern()
 {
-    mm::GenerateSettings g;
-    g.density = param (mmp::ParamIDs::genDensity);
-    g.range = param (mmp::ParamIDs::genRange);
-    g.gate = param (mmp::ParamIDs::genGate);
     mm::JuceLcg r (mm::JuceLcg::timeSeed());
-    auto p = mm::generatePattern (pattern.bars, g, currentScale(), currentKey(), r);
+    auto p = mm::makeMelody (pattern.bars, melodySettings(), melodyStyle(), currentScale(), currentKey(), r);
     loadedLibraryKey = {};
     setPattern (p);
 }
@@ -293,18 +316,28 @@ void MelodyMagicProcessor::randomiseNotes()
     }
     auto p = pattern;
     mm::JuceLcg r (mm::JuceLcg::timeSeed());
-    mm::randomiseNotes (p, param (mmp::ParamIDs::genRange), currentScale(), currentKey(), r);
+    mm::melodiseNotes (p, melodySettings(), melodyStyle(), currentScale(), currentKey(), r);
     setPattern (p);
 }
 
 void MelodyMagicProcessor::shuffleFileNotes()
 {
-    if (fileNotes.empty() || pattern.notes.empty())
+    if (filePattern.notes.empty() || pattern.notes.empty())
         return;
+    std::vector<int> pool;
+    for (auto& n : filePattern.notes)
+        pool.push_back (n.offset);
     auto p = pattern;
     mm::JuceLcg r (mm::JuceLcg::timeSeed());
-    mm::shuffleNotes (p, fileNotes, r);
+    mm::shuffleNotes (p, pool, r);
     setPattern (p);
+}
+
+File MelodyMagicProcessor::getUserMidiFolder() const
+{
+    auto folder = File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("MelodyMagic").getChildFile ("My MIDI");
+    folder.createDirectory();
+    return folder;
 }
 
 bool MelodyMagicProcessor::importMidiFile (const File& file, String& error)
@@ -322,18 +355,68 @@ bool MelodyMagicProcessor::importMidiFile (const File& file, String& error)
         return false;
     }
 
-    std::vector<int> notes;
-    auto p = mm::patternFromMidi (clip, currentKey(), file.getFileNameWithoutExtension().toStdString(), &notes);
+    auto p = mm::patternFromMidi (clip, currentKey(), file.getFileNameWithoutExtension().toStdString());
     if (p.notes.empty())
     {
         error = "No notes in the first " + String (mm::kMaxBars) + " bars.";
         return false;
     }
-    fileNotes = std::move (notes);
+    filePattern = p;
     fileName = file.getFileName();
-    loadedLibraryKey = {};
+    const auto folder = getUserMidiFolder();
+    loadedLibraryKey = file.isAChildOf (folder) ? "My MIDI/" + file.getRelativePathFrom (folder).replaceCharacter ('\\', '/')
+                                                : String();
     setPattern (p);
     return true;
+}
+
+bool MelodyMagicProcessor::addMidiToLibrary (const File& file, String& error)
+{
+    const auto folder = getUserMidiFolder();
+    File target = file;
+    if (! file.isAChildOf (folder))
+    {
+        target = folder.getNonexistentChildFile (file.getFileNameWithoutExtension(), ".mid", false);
+        if (! file.copyFileTo (target))
+        {
+            error = "Could not copy the file into " + folder.getFullPathName();
+            return false;
+        }
+    }
+    if (! importMidiFile (target, error))
+    {
+        if (target != file)
+            target.deleteFile();
+        return false;
+    }
+    return true;
+}
+
+File MelodyMagicProcessor::savePatternToLibrary (const String& name)
+{
+    const int root = 60 + currentKey() - (currentKey() >= 7 ? 12 : 0);
+    mm::MidiClip clip;
+    clip.ppq = mm::kPhrasePpq;
+    clip.bpm = lastBpm.load();
+    for (auto& n : pattern.notes)
+    {
+        mm::TimedNote t;
+        t.note = jlimit (0, 127, root + n.offset);
+        t.vel = n.velocity;
+        t.start = n.start;
+        t.end = n.end;
+        clip.notes.push_back (t);
+    }
+    auto safeName = File::createLegalFileName (name.trim());
+    if (safeName.isEmpty())
+        safeName = "Pattern";
+    const auto file = getUserMidiFolder().getNonexistentChildFile (safeName, ".mid", false);
+    if (! mm::writeMidiFile (file.getFullPathName().toStdString(), clip, safeName.toStdString()))
+        return {};
+    pattern.name = safeName.toStdString();
+    loadedLibraryKey = "My MIDI/" + file.getFileName();
+    sendChangeMessage();
+    return file;
 }
 
 void MelodyMagicProcessor::setGroove (std::optional<mm::Groove> g, const String& name)
@@ -474,11 +557,21 @@ void MelodyMagicProcessor::getStateInformation (MemoryBlock& destData)
     }
     root.appendChild (pt, nullptr);
 
-    if (! fileNotes.empty())
+    if (! filePattern.notes.empty())
     {
-        ValueTree f ("FILE_NOTES");
+        ValueTree f ("FILE_PATTERN");
         f.setProperty ("Name", fileName, nullptr);
-        f.setProperty ("Offsets", joinInts (fileNotes), nullptr);
+        f.setProperty ("Bars", filePattern.bars, nullptr);
+        f.setProperty ("Use_Style", useFileStyle, nullptr);
+        for (auto& n : filePattern.notes)
+        {
+            ValueTree note ("NOTE");
+            note.setProperty ("Start", n.start, nullptr);
+            note.setProperty ("End", n.end, nullptr);
+            note.setProperty ("Offset", n.offset, nullptr);
+            note.setProperty ("Velocity", n.velocity, nullptr);
+            f.appendChild (note, nullptr);
+        }
         root.appendChild (f, nullptr);
     }
     if (groove)
@@ -534,13 +627,19 @@ void MelodyMagicProcessor::setStateInformation (const void* data, int sizeInByte
         loadedLibraryKey = pt.getProperty ("Library_Key").toString();
     }
 
-    fileNotes.clear();
+    filePattern = {};
     fileName = {};
-    const auto f = root.getChildWithName ("FILE_NOTES");
+    const auto f = root.getChildWithName ("FILE_PATTERN");
     if (f.isValid())
     {
-        fileNotes = splitInts (f.getProperty ("Offsets").toString());
+        filePattern.bars = mm::legalBars ((int) f.getProperty ("Bars", 1));
+        for (const auto& note : f)
+            filePattern.notes.push_back ({ (int) note.getProperty ("Start", 0), (int) note.getProperty ("End", 24),
+                                           jlimit (-mm::kMaxOffset, mm::kMaxOffset, (int) note.getProperty ("Offset", 0)),
+                                           jlimit (1, 127, (int) note.getProperty ("Velocity", 100)) });
+        filePattern.sort();
         fileName = f.getProperty ("Name").toString();
+        useFileStyle = (bool) f.getProperty ("Use_Style", true);
     }
 
     groove.reset();
