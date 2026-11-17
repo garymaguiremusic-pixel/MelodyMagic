@@ -57,8 +57,13 @@ namespace mm
     /** A new melody: rhythm and notes. */
     Pattern makeMelody (int bars, const MelodySettings&, const MelodyStyle&, const ScaleContext&, int key, Rng&);
 
-    /** New notes for an existing rhythm (starts, lengths and velocities stay). */
-    void melodiseNotes (Pattern&, const MelodySettings&, const MelodyStyle&, const ScaleContext&, int key, Rng&);
+    /** New notes for an existing rhythm (starts, lengths and velocities stay).
+        keepFirstBar: a variation - bar 1 stays as it is and the other bars are re-written around it. */
+    void melodiseNotes (Pattern&, const MelodySettings&, const MelodyStyle&, const ScaleContext&, int key, Rng&,
+                        bool keepFirstBar = false);
+
+    /** Keeps the melody (the notes, in order, bar by bar) and gives it a new rhythm. */
+    void rhythmiseMelody (Pattern&, const MelodySettings&, const MelodyStyle&, Rng&);
 
     // Scale-degree helpers (exposed for tests) -----------------------------------------
     int degreeToOffset (int degree, const ScaleContext&, int key);

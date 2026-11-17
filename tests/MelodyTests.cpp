@@ -207,3 +207,64 @@ TEST_CASE ("Melodies learn from an imported file", "[melody][import]")
         }
     }
 }
+
+TEST_CASE ("Keep Melody: same notes in order, new rhythm", "[melody][keep]")
+{
+    const auto sc = ScaleContext::make (NaturalMinor, 9);
+    Pattern p;
+    p.bars = 2;
+    const int line[] = { 0, 3, 7, 5, 3, 2, 0, -2 };
+    for (int b = 0; b < 2; ++b)
+        for (int i = 0; i < 8; ++i)
+            p.notes.push_back ({ b * 384 + i * 48, b * 384 + i * 48 + 40, line[(i + b * 3) % 8], 100 });
+
+    for (std::int64_t seed = 1; seed <= 20; ++seed)
+    {
+        auto q = p;
+        JuceLcg r (seed);
+        rhythmiseMelody (q, {}, defaultMelodyStyle (sc), r);
+        CHECK (q.bars == 2);
+        REQUIRE (! q.notes.empty());
+        for (int b = 0; b < 2; ++b)
+        {
+            // the bar's notes come from the same bar of the original, in order
+            std::vector<int> original, now;
+            for (auto& n : p.notes) if (n.start / 384 == b) original.push_back (n.offset);
+            for (auto& n : q.notes) if (n.start / 384 == b) now.push_back (n.offset);
+            size_t k = 0;
+            for (int o : now)
+            {
+                while (k < original.size() && original[k] != o) ++k;
+                CHECK (k < original.size());   // a subsequence (with repeats) of the original
+            }
+        }
+    }
+}
+
+TEST_CASE ("Keep Both: bar 1 stays, the rest is re-written around it", "[melody][keep]")
+{
+    const int key = 9;
+    const auto sc = ScaleContext::make (NaturalMinor, key);
+    JuceLcg g (5);
+    const auto p = makeMelody (4, {}, defaultMelodyStyle (sc), sc, key, g);
+
+    int changed = 0;
+    for (std::int64_t seed = 1; seed <= 10; ++seed)
+    {
+        auto q = p;
+        JuceLcg r (seed);
+        melodiseNotes (q, {}, defaultMelodyStyle (sc), sc, key, r, true);
+        REQUIRE (q.notes.size() == p.notes.size());
+        for (size_t i = 0; i < q.notes.size(); ++i)
+        {
+            CHECK (q.notes[i].start == p.notes[i].start);
+            CHECK (q.notes[i].end == p.notes[i].end);
+            if (q.notes[i].start < 384)
+                CHECK (q.notes[i].offset == p.notes[i].offset);
+            else if (q.notes[i].offset != p.notes[i].offset)
+                ++changed;
+            CHECK (sc.inScale (key + q.notes[i].offset));
+        }
+    }
+    CHECK (changed > 0);
+}

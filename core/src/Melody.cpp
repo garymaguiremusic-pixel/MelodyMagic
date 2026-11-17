@@ -438,10 +438,18 @@ namespace mm
         /** Writes the notes for one bar; bar rhythms are relative to the bar start. */
         void writeBars (const std::vector<std::vector<PatternNote>>& rhythms, const std::vector<int>& form,
                         const std::vector<int>& chords, const MelodySettings& m, const MelodyStyle& style,
-                        const ScaleContext& sc, Rng& rng, std::vector<std::vector<int>>& degreesOut)
+                        const ScaleContext& sc, Rng& rng, std::vector<std::vector<int>>& degreesOut,
+                        const std::vector<int>* fixedHook = nullptr)
         {
             const int n = scaleSize (sc);
-            const auto r = rangeFor (m, style, n);
+            auto r = rangeFor (m, style, n);
+            const bool useFixed = fixedHook != nullptr && ! fixedHook->empty() && fixedHook->size() == rhythms[0].size();
+            if (useFixed)
+                for (int d : *fixedHook)
+                {
+                    r.lo = std::min (r.lo, d);
+                    r.hi = std::max (r.hi, d);
+                }
             Writer w { sc, style, n, r.lo, r.hi, rng };
 
             const int bars = (int) form.size();
@@ -454,8 +462,8 @@ namespace mm
             for (int d = r.lo; d <= r.hi; ++d)
                 if (isChordTone (d, root0, n))
                     starts.push_back ({ d, (d >= 0 && d <= n) ? 3.0 * w.degreeWeight (d) : 0.6 });
-            const int hookStart = starts.empty() ? 0 : pickWeighted (starts, rng);
-            const auto hook = w.line (rhythms[0], root0, hookStart, hookStart, pedal);
+            const int hookStart = useFixed ? fixedHook->front() : (starts.empty() ? 0 : pickWeighted (starts, rng));
+            const auto hook = useFixed ? *fixedHook : w.line (rhythms[0], root0, hookStart, hookStart, pedal);
 
             degreesOut.assign ((size_t) bars, {});
             for (int b = 0; b < bars; ++b)
@@ -542,7 +550,8 @@ namespace mm
         return p;
     }
 
-    void melodiseNotes (Pattern& p, const MelodySettings& m, const MelodyStyle& style, const ScaleContext& sc, int key, Rng& rng)
+    void melodiseNotes (Pattern& p, const MelodySettings& m, const MelodyStyle& style, const ScaleContext& sc, int key, Rng& rng,
+                        bool keepFirstBar)
     {
         if (p.notes.empty())
             return;
@@ -585,12 +594,30 @@ namespace mm
         if (rhythms[0].empty())
             rhythms[0].push_back ({ 0, kStep, 0, 100 });
 
+        // Variation: bar 1 stays exactly as it is and becomes the hook for the other bars
+        keepFirstBar = keepFirstBar && bars > 1;
+        std::vector<int> hook;
+        if (keepFirstBar)
+        {
+            std::map<int, int> top;
+            for (auto& note : p.notes)
+                if (note.start < kTicksPerBar)
+                {
+                    const int d = offsetToDegree (note.offset, sc, key);
+                    auto it = top.find (note.start);
+                    if (it == top.end() || d > it->second)
+                        top[note.start] = d;
+                }
+            for (auto& r : rhythms[0])
+                hook.push_back (top.count (r.start) ? top[r.start] : 0);
+        }
+
         std::vector<std::vector<int>> degrees;
-        writeBars (rhythms, form, chords, m, style, sc, rng, degrees);
+        writeBars (rhythms, form, chords, m, style, sc, rng, degrees, keepFirstBar ? &hook : nullptr);
 
         // write back: the top note of each onset gets the melody, the others stack below it
         std::map<int, int> melodyAt;
-        for (int b = 0; b < bars; ++b)
+        for (int b = keepFirstBar ? 1 : 0; b < bars; ++b)
             for (size_t i = 0; i < rhythms[(size_t) b].size() && i < degrees[(size_t) b].size(); ++i)
                 melodyAt[rhythms[(size_t) b][i].start + b * kTicksPerBar] = degrees[(size_t) b][i];
 
@@ -613,5 +640,73 @@ namespace mm
             note.offset = std::clamp (degreeToOffset (d, sc, key), -kMaxOffset, kMaxOffset);
         }
         p.sort();
+    }
+
+    void rhythmiseMelody (Pattern& p, const MelodySettings& m, const MelodyStyle& style, Rng& rng)
+    {
+        if (p.notes.empty())
+            return;
+        for (int i = 0; i < 3; ++i)
+            rng.nextInt();
+        p.sort();
+        const int bars = std::max (1, p.bars);
+
+        // the melody, in order: the notes of each onset (a chord stays a chord)
+        struct Onset { int start; std::vector<int> offsets; };
+        std::vector<Onset> melody;
+        for (auto& note : p.notes)
+        {
+            if (melody.empty() || melody.back().start != note.start)
+                melody.push_back ({ note.start, {} });
+            melody.back().offsets.push_back (note.offset);
+        }
+
+        // a new rhythm: hook, repeats and answer, like New Melody
+        const auto form = formFor (bars);
+        std::vector<PatternNote> a = style.rhythmA.empty() ? templateBar (m.density, m.gate, rng) : style.rhythmA;
+        if (a.empty())
+            a.push_back ({ 0, 2 * kStep, 0, 112 });
+        std::vector<std::vector<PatternNote>> rhythms;
+        for (int b = 0; b < bars; ++b)
+        {
+            if (form[(size_t) b] == 0)
+                rhythms.push_back (a);
+            else if (style.fromFile && ! style.rhythmB.empty())
+                rhythms.push_back (style.rhythmB);
+            else
+                rhythms.push_back (answerBar (a, m.density, m.gate, form[(size_t) b] == 2, rng));
+        }
+
+        // each bar's notes go to that bar's new rhythm in the same order, spread evenly
+        Pattern out;
+        out.name = p.name;
+        out.bars = bars;
+        for (int b = 0; b < bars; ++b)
+        {
+            std::vector<const Onset*> old;
+            for (auto& o : melody)
+                if (o.start / kTicksPerBar == b)
+                    old.push_back (&o);
+            if (old.empty())
+                for (auto& o : melody)
+                    old.push_back (&o);
+
+            const auto& rhythm = rhythms[(size_t) b];
+            for (size_t i = 0; i < rhythm.size(); ++i)
+            {
+                const auto* src = old[std::min (old.size() - 1, i * old.size() / std::max<size_t> (1, rhythm.size()))];
+                for (int offset : src->offsets)
+                {
+                    auto note = rhythm[i];
+                    note.start += b * kTicksPerBar;
+                    note.end = std::min (note.end + b * kTicksPerBar, (b + 1) * kTicksPerBar);
+                    note.offset = offset;
+                    if (note.end > note.start)
+                        out.notes.push_back (note);
+                }
+            }
+        }
+        out.sort();
+        p = out;
     }
 }

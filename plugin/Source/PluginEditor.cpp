@@ -30,9 +30,10 @@ namespace
             "Rows show the notes when you hold the KEY's root; other keys move the whole pattern. Drag in the lower strip for velocity.",
             "SCALE LOCK:  every note sent (live and Drag MIDI) moves to the nearest note of KEY + SCALE.",
             "MELODY MAKER:  NEW MELODY writes a trance lead over CHORDS: chord tones on the beats, a hook that repeats and an answer bar.",
-            "RANDOMISE NOTES keeps the rhythm and writes a new melody over it.  LEARN FROM FILE: copy the imported file's rhythm and style.",
+            "KEEP PATTERN: New Melody writes new notes in the same rhythm.  KEEP MELODY: the same notes in a new rhythm.  BOTH: a variation.",
+            "LEARN FILE: copy the imported file's rhythm and style.  RANDOMISE NOTES (Library): new notes, same rhythm.",
             "MY MIDI (Library):  Import... adds .mid files, Save... stores the pattern. Dropping a .mid on the pattern imports it too.",
-            "SHUFFLE FILE NOTES:  keeps the rhythm and uses exactly the file's notes, in new places.",
+            "SHUFFLE FILE NOTES (Library):  keeps the rhythm and uses exactly the file's notes, in new places.",
             "GROOVE:  pick a groove preset; Q Start / Q End pull note starts / ends onto it.",
             "DRAG MIDI:  drag the blue grip onto a DAW track (the last chord you played, at least 4 bars).",
             "With the DAW stopped, the pattern starts when you press a key. Knobs move in steps of 1 (drag or mouse wheel).",
@@ -141,16 +142,19 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
                 "How far the melody spreads, in semitones");
     attachKnob (gateKnob, mmp::ParamIDs::genGate, [] (double v) { return String (roundToInt (v)) + " %"; },
                 "Note length (100 % = legato)");
-    newPatternButton.setTooltip ("Write a new melody: rhythm and notes, over the chords, always in the Key + Scale");
-    randomiseButton.setTooltip ("Keep the rhythm and write a new melody over it");
-    shuffleButton.setTooltip ("Keep the rhythm and use exactly the imported MIDI file's notes, in new places");
+    newPatternButton.setTooltip ("Write a new melody over the chords, always in the Key + Scale.\n"
+                                 "Keep Pattern: new notes in the same rhythm.  Keep Melody: the same notes in a new rhythm.\n"
+                                 "Both: a variation - bar 1 stays, the rest is re-written around it.");
     fileStyleButton.setTooltip ("Learn from the imported MIDI file: its rhythm, intervals, favourite notes and range");
-    fileStyleButton.setClickingTogglesState (true);
+    keepPatternButton.setTooltip ("Keep the pattern (rhythm): New Melody writes new notes into it");
+    keepMelodyButton.setTooltip ("Keep the melody (the notes, in order): New Melody gives it a new rhythm");
+    for (auto* b : { &fileStyleButton, &keepPatternButton, &keepMelodyButton })
+        b->setClickingTogglesState (true);
     newPatternButton.onClick = [this] { processor.generateNewPattern(); grid.grabKeyboardFocus(); };
-    randomiseButton.onClick = [this] { processor.randomiseNotes(); grid.grabKeyboardFocus(); };
-    shuffleButton.onClick = [this] { processor.shuffleFileNotes(); grid.grabKeyboardFocus(); };
     fileStyleButton.onClick = [this] { processor.useFileStyle = fileStyleButton.getToggleState(); updateFromModel(); };
-    for (auto* b : { &newPatternButton, &randomiseButton, &shuffleButton, &fileStyleButton })
+    keepPatternButton.onClick = [this] { processor.keepPattern = keepPatternButton.getToggleState(); updateFromModel(); };
+    keepMelodyButton.onClick = [this] { processor.keepMelody = keepMelodyButton.getToggleState(); updateFromModel(); };
+    for (auto* b : { &newPatternButton, &fileStyleButton, &keepPatternButton, &keepMelodyButton })
         addAndMakeVisible (b);
 
     // Groove ----------------------------------------------------------------------------
@@ -296,8 +300,8 @@ void MelodyMagicPanel::updateFromModel()
     redoButton.setEnabled (processor.canRedo());
 
     const int fileNotes = processor.numFileNotes();
-    shuffleButton.setEnabled (fileNotes > 0);
-    shuffleButton.setButtonText (fileNotes > 0 ? "Shuffle File Notes" : "Shuffle (import MIDI)");
+    keepPatternButton.setToggleState (processor.keepPattern, dontSendNotification);
+    keepMelodyButton.setToggleState (processor.keepMelody, dontSendNotification);
 
     grid.modelChanged();
     updateSelectionInfo();
@@ -318,6 +322,7 @@ void MelodyMagicPanel::updateFromModel()
 
     updateCustomKeys();
     repaint (patternArea.toNearestInt());
+    repaint (generateArea.toNearestInt());
 }
 
 void MelodyMagicPanel::updateSelectionInfo()
@@ -405,8 +410,8 @@ void MelodyMagicPanel::resized()
     gateKnob.setBounds (904, 364, 64, 64);
     newPatternButton.setBounds (708, 434, 168, 26);
     fileStyleButton.setBounds (880, 434, 104, 26);
-    randomiseButton.setBounds (708, 466, 136, 24);
-    shuffleButton.setBounds (848, 466, 136, 24);
+    keepPatternButton.setBounds (708, 466, 136, 24);
+    keepMelodyButton.setBounds (848, 466, 136, 24);
 
     // groove
     grooveBox.setBounds (708, 532, 170, 22);
@@ -462,8 +467,9 @@ void MelodyMagicPanel::paint (Graphics& g)
                           Rectangle<int> (708, 250, 276, 22), Justification::centred, 1, 0.8f);
     }
 
-    const String style = processor.fileStyleActive() ? "Style: " + processor.getFileName().upToLastOccurrenceOf (".", false, true)
-                                                     : String ("Style: Classic Trance");
+    const String style = processor.describeNewMelody()
+                       + (processor.fileStyleActive() ? "  |  style: " + processor.getFileName().upToLastOccurrenceOf (".", false, true)
+                                                      : String ("  |  style: trance"));
     CustomLookAndFeel::drawPanel (g, generateArea, "Melody Maker");
     CustomLookAndFeel::drawSmallLabel (g, "Chords", { 708.0f, 310.0f, 54.0f, 22.0f }, Justification::centredLeft);
     g.setFont (CustomLookAndFeel::uiFont (10.0f));

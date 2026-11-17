@@ -302,9 +302,33 @@ String MelodyMagicProcessor::describeChords() const
 void MelodyMagicProcessor::generateNewPattern()
 {
     mm::JuceLcg r (mm::JuceLcg::timeSeed());
-    auto p = mm::makeMelody (pattern.bars, melodySettings(), melodyStyle(), currentScale(), currentKey(), r);
-    loadedLibraryKey = {};
+    const auto settings = melodySettings();
+    const auto style = melodyStyle();
+    auto p = pattern;
+
+    if (pattern.notes.empty() || (! keepPattern && ! keepMelody))
+    {
+        p = mm::makeMelody (pattern.bars, settings, style, currentScale(), currentKey(), r);
+        loadedLibraryKey = {};
+    }
+    else if (keepPattern && ! keepMelody)
+        mm::melodiseNotes (p, settings, style, currentScale(), currentKey(), r);
+    else if (keepMelody && ! keepPattern)
+        mm::rhythmiseMelody (p, settings, style, r);
+    else
+        mm::melodiseNotes (p, settings, style, currentScale(), currentKey(), r, true);
     setPattern (p);
+}
+
+String MelodyMagicProcessor::describeNewMelody() const
+{
+    if (keepPattern && keepMelody)
+        return pattern.bars > 1 ? "New Melody: a variation (bar 1 stays, the rest changes)" : "New Melody: new notes (use 2+ bars for a variation)";
+    if (keepPattern)
+        return "New Melody: new notes in this pattern";
+    if (keepMelody)
+        return "New Melody: this melody in a new pattern";
+    return "New Melody: new pattern and new notes";
 }
 
 void MelodyMagicProcessor::randomiseNotes()
@@ -587,6 +611,8 @@ void MelodyMagicProcessor::getStateInformation (MemoryBlock& destData)
 
     ValueTree ui ("UI");
     ui.setProperty ("EditorWidth", editorWidth.load(), nullptr);
+    ui.setProperty ("Keep_Pattern", keepPattern, nullptr);
+    ui.setProperty ("Keep_Melody", keepMelody, nullptr);
     ui.setProperty ("Custom_Mask", (int) customMask.load(), nullptr);
     root.appendChild (ui, nullptr);
 
@@ -664,6 +690,8 @@ void MelodyMagicProcessor::setStateInformation (const void* data, int sizeInByte
     if (ui.isValid())
     {
         editorWidth.store ((int) ui.getProperty ("EditorWidth", 0));
+        keepPattern = (bool) ui.getProperty ("Keep_Pattern", false);
+        keepMelody = (bool) ui.getProperty ("Keep_Melody", false);
         customMask.store ((std::uint16_t) ((int) ui.getProperty ("Custom_Mask", 0x0fff) & 0x0fff));
     }
 

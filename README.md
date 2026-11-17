@@ -59,9 +59,19 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
   * a one-bar hook repeats over each chord, moved to fit it, and an answer bar ends the phrase (4 bars = A A A B, 8 bars = A A A B A A A C);
   * rhythms come from classic trance lead rhythms (offbeat, 3-3-2, rolling, gallop and others).
   * **Density** sets how busy the rhythm is, **Range** how far the melody spreads, and **Gate** the note length.
-* **Randomise Notes** keeps the rhythm and writes a new melody over it. It is also in the Library.
+* **Keep Pattern** and **Keep Melody** choose what New Melody keeps:
+
+  | Keep Pattern | Keep Melody | New Melody does |
+  |---|---|---|
+  | off | off | a new rhythm and new notes |
+  | on | off | keeps the rhythm, new notes |
+  | off | on | keeps the notes (in order, bar by bar), new rhythm |
+  | on | on | a variation: bar 1 stays exactly as it is, the other bars are re-written around it |
+
+  The line under the buttons says what the next press will do.
+* **Randomise Notes** (Library) keeps the rhythm and writes new notes.
 * **Learn File** is on once you've loaded a MIDI file. New Melody and Randomise Notes then learn from that file: its rhythm (its first bar is the hook, its last bar the answer), its intervals, its favourite notes and its range.
-* **Shuffle File Notes** keeps the rhythm and uses exactly the file's notes, in new places.
+* **Shuffle Notes** (Library) keeps the rhythm and uses exactly the imported file's notes, in new places.
 
 **Library.** It has three tabs; click an entry to load it, and with the list focused the arrow keys browse.
 

@@ -64,7 +64,7 @@ private:
     FileModel fileModel { *this };
     juce::ListBox folderList { "folders", &folderModel }, fileList { "files", &fileModel };
     juce::TextEditor searchBox;
-    juce::TextButton randomiseButton { "Randomise Notes" }, folderButton { "Folder..." }, rescanButton { "Rescan" },
+    juce::TextButton randomiseButton { "Randomise Notes" }, shuffleButton { "Shuffle Notes" }, folderButton { "Folder..." }, rescanButton { "Rescan" },
                      importButton { "Import..." }, saveButton { "Save..." };
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::AlertWindow> saveDialog;

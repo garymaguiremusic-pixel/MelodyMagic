@@ -52,6 +52,8 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
 
     randomiseButton.setTooltip ("Keep the pattern's rhythm and write a new melody over it (in the Key + Scale, learning from your MIDI file)");
     randomiseButton.onClick = [this] { proc.randomiseNotes(); };
+    shuffleButton.setTooltip ("Keep the rhythm and use exactly the imported MIDI file's notes, in new places");
+    shuffleButton.onClick = [this] { proc.shuffleFileNotes(); };
     folderButton.setTooltip ("Choose the library folder (nora_*_library.json and/or .fas / .qas files)");
     folderButton.onClick = [this]
     {
@@ -70,7 +72,7 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     importButton.onClick = [this] { importFiles(); };
     saveButton.setTooltip ("Save the current pattern into My MIDI");
     saveButton.onClick = [this] { savePattern(); };
-    for (auto* b : { &randomiseButton, &folderButton, &rescanButton, &importButton, &saveButton })
+    for (auto* b : { &randomiseButton, &shuffleButton, &folderButton, &rescanButton, &importButton, &saveButton })
     {
         b->setWantsKeyboardFocus (false);
         addAndMakeVisible (b);
@@ -96,6 +98,7 @@ void LibraryPanel::refresh()
         lib = newLib;
         rebuildKeys();
     }
+    shuffleButton.setEnabled (proc.numFileNotes() > 0);
     fileList.repaint();
     repaint();
 }
@@ -385,16 +388,18 @@ void LibraryPanel::resized()
     auto top = area.removeFromTop (22);
     for (auto& b : categoryButtons)
     {
-        b.setBounds (top.removeFromLeft (78));
+        b.setBounds (top.removeFromLeft (70));
         top.removeFromLeft (4);
     }
     for (auto* b : { &rescanButton, &folderButton, &saveButton, &importButton })
         if (b->isVisible())
         {
-            b->setBounds (top.removeFromRight (b == &folderButton ? 70 : 64));
+            b->setBounds (top.removeFromRight (b == &folderButton ? 70 : 62));
             top.removeFromRight (4);
         }
-    randomiseButton.setBounds (top.removeFromRight (128));
+    randomiseButton.setBounds (top.removeFromRight (116));
+    top.removeFromRight (4);
+    shuffleButton.setBounds (top.removeFromRight (104));
 
     area.removeFromTop (6);
     auto left = area.removeFromLeft (200);

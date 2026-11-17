@@ -43,6 +43,7 @@ int main (int argc, char** argv)
         proc->setPattern (pt);
     }
     proc->generateNewPattern();
+    proc->keepPattern = true;   // show the Keep Pattern state in the screenshot
     std::unique_ptr<AudioProcessorEditor> editor (proc->createEditor());
     editor->setSize (MelodyMagicPanel::kBaseWidth, MelodyMagicPanel::kBaseHeight);
     for (int i = 0; i < 20; ++i)

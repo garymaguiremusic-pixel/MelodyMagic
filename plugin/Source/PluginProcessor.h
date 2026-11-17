@@ -72,7 +72,11 @@ public:
     void redo();
 
     // Melody Maker (always in the Key + Scale)
-    void generateNewPattern();      // a new melody: rhythm and notes
+    /** New Melody. Keep Pattern: new notes in the same rhythm. Keep Melody: the same notes in a
+        new rhythm. Both: a variation (bar 1 stays, the rest is re-written). Neither: all new. */
+    void generateNewPattern();
+    bool keepPattern = false, keepMelody = false;
+    juce::String describeNewMelody() const;
     void randomiseNotes();          // keeps the rhythm, writes a new melody over it
     void shuffleFileNotes();        // keeps the rhythm, moves the MIDI file's notes around
     int numFileNotes() const noexcept               { return (int) filePattern.notes.size(); }
