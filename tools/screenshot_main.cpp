@@ -37,6 +37,9 @@ int main (int argc, char** argv)
     }
 
     MessageManager::getInstance()->runDispatchLoopUntil (1500);   // library loads in the background
+    if (const char* tab = std::getenv ("MM_LIBRARY_VIEW"))   // e.g. "1|Phrases/kick101/Bass"
+        proc->setLibraryView (String (tab).upToFirstOccurrenceOf ("|", false, false).getIntValue(),
+                              String (tab).fromFirstOccurrenceOf ("|", false, false));
     {
         auto pt = proc->getPattern();
         pt.bars = 4;
@@ -169,6 +172,19 @@ int main (int argc, char** argv)
                 ++match;
         std::printf ("import plays back: %d of 16 notes identical (pitch, time, velocity)\n", match);
         File (src).deleteFile();
+
+        // save into a library section, change the key, load it back: same notes, its own key
+        const auto before = proc->getPattern();
+        const auto saved = proc->savePatternToLibrary ("Saved Arp", "Factory/Arps");
+        std::printf ("saved into Factory/Arps: %s -> key %s\n", saved.existsAsFile() ? "OK" : "FAILED",
+                     proc->libraryKeyForFile (saved).toRawUTF8());
+        if (auto* kp = proc->apvts.getParameter (mmp::ParamIDs::scaleKey)) kp->setValueNotifyingHost (kp->convertTo0to1 (0.0f));
+        if (auto* sp = proc->apvts.getParameter (mmp::ParamIDs::scaleIndex)) sp->setValueNotifyingHost (sp->convertTo0to1 (0.0f));
+        String err2;
+        proc->importMidiFile (saved, err2);
+        std::printf ("reloaded: key %s %s, notes %s\n", mm::keyName (proc->currentKey()), mm::scaleName (proc->currentScaleIndex()),
+                     proc->getPattern().notes == before.notes ? "IDENTICAL" : "DIFFERENT");
+        saved.deleteFile();
         proc->getUserMidiFolder().getChildFile ("mm_test_gminor.mid").deleteFile();
         MessageManager::getInstance()->runDispatchLoopUntil (100);
     }

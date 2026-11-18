@@ -58,7 +58,11 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
 
 **Melody Maker.** The melodies follow how classic trance leads are written, and they are always in the Key and Scale:
 
-* **Chords** sets the progression the melody is written over, one chord per bar. The panel shows the actual chords in your key (e.g. Am F C G). **Auto** uses the classic trance progression for the scale.
+* **Chords** sets the progression the melody is written over, one chord per bar. The panel shows the actual chords in your key (e.g. Am F C G, with flats in flat keys: Gm Eb Bb F). **Auto** uses the classic trance progression for the scale. The list has:
+  * classic progressions;
+  * a **Dark** set (e.g. 1-6-4-5 = Am F Dm Em, 1-7-6-5, 1-2-1-7, 1-4-1-6);
+  * an **Uplifting** set;
+  * 8-bar progressions.
 * The melodies are written the way classic trance leads are:
   * notes on the beat are chord tones, and the notes in between move by scale step (passing and neighbour notes), with the odd leap;
   * a one-bar hook repeats over each chord, moved to fit it, and an answer bar ends the phrase (4 bars = A A A B, 8 bars = A A A B A A A C);
@@ -73,11 +77,13 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
 * **Learn From MIDI File** is on once you've loaded a MIDI file. New Melody and Randomise Notes then learn from that file: its rhythm (its first bar is the hook, its last bar the answer), its intervals, its favourite notes and its range.
 * **Shuffle Notes** (Library) keeps the rhythm and uses exactly the imported file's notes, in new places.
 
-**Library.** It has three tabs; click an entry to load it, and with the list focused the arrow keys browse.
+**Library.** It has three tabs; click an entry to load it, and with the list focused the arrow keys browse. It reopens on the tab and folder you used last.
 
 * **Factory:** the built-in patterns.
 * **Phrases:** the library folder (**Folder...**). A phrase's rows become chord notes of your key (1st, 3rd, 5th of the scale), and loading one switches the Arp to Melody mode. It holds `nora_fas_library.json` or `.fas` files; these are not in this repository, because their pack asks that they not be redistributed.
-* **My MIDI:** your own MIDI files, kept in `Documents\MelodyMagic\My MIDI`. **Import...** copies `.mid` files in and loads them, and **Save...** stores the current pattern there. Right-click an entry to delete it or show it in Explorer. Dropping a `.mid` on the pattern imports it into My MIDI too.
+* **My MIDI:** your own MIDI files, kept in `Documents\MelodyMagic\My MIDI`. **Import...** copies `.mid` files in and loads them. Importing reads **notes only**: controllers (CC), pitch bend, aftertouch, program changes and SysEx are ignored. Right-click an entry to delete it or show it in Explorer.
+* **Save...** (any tab) saves the current pattern as MIDI into **My MIDI** or any **Factory** or **Phrases** folder (Arps, Bass, MonoLines ...). It then appears in that folder. Patterns saved into Factory and Phrases folders are kept in `Documents\MelodyMagic\User Patterns`. A saved pattern remembers its Key and Scale, so loading it never guesses the key.
+* Phrases folders show their short name (Bass, MonoLines ...). Dropping a `.mid` on the pattern imports it into My MIDI too.
 
 **Groove.** Pick a preset from the Groove dropdown (they come from `nora_qas_library.json` in the library folder). **Q Start** and **Q End** pull note starts and ends onto it; **Link** uses one strength for both.
 

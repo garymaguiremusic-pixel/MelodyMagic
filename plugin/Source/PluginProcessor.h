@@ -93,8 +93,19 @@ public:
     bool importMidiFile (const juce::File&, juce::String& error);
     /** Copies a MIDI file into My MIDI, then loads it. */
     bool addMidiToLibrary (const juce::File&, juce::String& error);
-    /** Saves the pattern into My MIDI as a .mid (played from the key's root). */
-    juce::File savePatternToLibrary (const juce::String& name);
+    /** Saves the pattern as a .mid (from the key's root in octave 3, with the key and scale in the
+        track name) into "My MIDI" or a library folder such as "Factory/Arps" or "Phrases/kick101/Bass".
+        Patterns saved into Factory / Phrases folders live in Documents/MelodyMagic/User Patterns. */
+    juce::File savePatternToLibrary (const juce::String& name, const juce::String& section = "My MIDI");
+    juce::File getUserPatternsFolder() const;
+    juce::File fileForLibraryKey (const juce::String& key) const;
+    juce::String libraryKeyForFile (const juce::File&) const;
+
+    /** The library tab (0 Factory, 1 Phrases, 2 My MIDI) and folder last shown: kept when the
+        window closes, saved with the project, and used for new instances. */
+    int libraryTab = 0;
+    juce::String libraryFolderShown;
+    void setLibraryView (int tab, const juce::String& folder);
 
     // Groove
     void setGroove (std::optional<mm::Groove>, const juce::String& name);

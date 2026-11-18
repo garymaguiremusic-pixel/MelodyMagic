@@ -365,34 +365,80 @@ namespace mm
     //==============================================================================
     // Progressions
     //==============================================================================
+    namespace
+    {
+        struct Progression { const char* name; std::vector<int> degrees; };
+
+        // Scale degrees (1-based in the names), one chord per bar. In A minor: 1 = Am, 2 = Bdim,
+        // 3 = C, 4 = Dm, 5 = Em, 6 = F, 7 = G. New entries go at the end (saved projects store the index).
+        const std::vector<Progression>& progressions()
+        {
+            static const std::vector<Progression> p
+            {
+                { "Auto", {} },
+                { "1 - 6 - 3 - 7", { 0, 5, 2, 6 } },
+                { "1 - 6 - 7 - 1", { 0, 5, 6, 0 } },
+                { "6 - 7 - 1 - 1", { 5, 6, 0, 0 } },
+                { "1 - 4 - 6 - 7", { 0, 3, 5, 6 } },
+                { "1 - 7 - 6 - 7", { 0, 6, 5, 6 } },
+                { "1 - 5 - 6 - 4", { 0, 4, 5, 3 } },
+                { "6 - 4 - 1 - 5", { 5, 3, 0, 4 } },
+                { "1 - 4 - 1 - 5", { 0, 3, 0, 4 } },
+                { "1 (no change)", { 0 } },
+                // darker
+                { "Dark: 1 - 6 - 4 - 5", { 0, 5, 3, 4 } },
+                { "Dark: 1 - 4 - 6 - 5", { 0, 3, 5, 4 } },
+                { "Dark: 1 - 7 - 6 - 5", { 0, 6, 5, 4 } },
+                { "Dark: 1 - 6 - 2 - 5", { 0, 5, 1, 4 } },
+                { "Dark: 1 - 2 - 1 - 7", { 0, 1, 0, 6 } },
+                { "Dark: 1 - 4 - 1 - 6", { 0, 3, 0, 5 } },
+                { "Dark: 1 - 1 - 6 - 5", { 0, 0, 5, 4 } },
+                { "Dark: 1 - 3 - 4 - 1", { 0, 2, 3, 0 } },
+                { "Dark: 1 - 6 - 7 - 5", { 0, 5, 6, 4 } },
+                { "Dark: 4 - 1 - 5 - 1", { 3, 0, 4, 0 } },
+                { "Dark: 1 - 5 - 4 - 1", { 0, 4, 3, 0 } },
+                { "Dark: 1 - 2 - 6 - 5", { 0, 1, 5, 4 } },
+                // uplifting
+                { "Uplifting: 6 - 7 - 1 - 3", { 5, 6, 0, 2 } },
+                { "Uplifting: 1 - 3 - 7 - 6", { 0, 2, 6, 5 } },
+                { "Uplifting: 4 - 6 - 7 - 1", { 3, 5, 6, 0 } },
+                { "Uplifting: 6 - 1 - 7 - 4", { 5, 0, 6, 3 } },
+                { "Uplifting: 1 - 7 - 3 - 6", { 0, 6, 2, 5 } },
+                // 8 bars
+                { "8 bars: 1-6-3-7-1-6-4-5", { 0, 5, 2, 6, 0, 5, 3, 4 } },
+                { "8 bars: 6-7-1-1-6-7-3-3", { 5, 6, 0, 0, 5, 6, 2, 2 } },
+                { "8 bars dark: 1-1-6-6-4-4-5-5", { 0, 0, 5, 5, 3, 3, 4, 4 } },
+            };
+            return p;
+        }
+
+        bool useFlats (const ScaleContext& sc, int key)
+        {
+            // key signatures with flats: F, Bb, Eb, Ab, Db major (and their relative minors)
+            const int major = floorMod (isMinor (sc, key) ? key + 3 : key, 12);
+            return major == 5 || major == 10 || major == 3 || major == 8 || major == 1;
+        }
+    }
+
     const std::vector<std::string>& progressionNames()
     {
-        static const std::vector<std::string> names
+        static const std::vector<std::string> names = []
         {
-            "Auto", "1 - 6 - 3 - 7", "1 - 6 - 7 - 1", "6 - 7 - 1 - 1", "1 - 4 - 6 - 7",
-            "1 - 7 - 6 - 7", "1 - 5 - 6 - 4", "6 - 4 - 1 - 5", "1 - 4 - 1 - 5", "1 (no change)"
-        };
+            std::vector<std::string> v;
+            for (auto& p : progressions())
+                v.push_back (p.name);
+            return v;
+        }();
         return names;
     }
 
     std::vector<int> progressionDegrees (int index, const ScaleContext& sc, int key)
     {
-        switch (index)
-        {
-            case 1: return { 0, 5, 2, 6 };
-            case 2: return { 0, 5, 6, 0 };
-            case 3: return { 5, 6, 0, 0 };
-            case 4: return { 0, 3, 5, 6 };
-            case 5: return { 0, 6, 5, 6 };
-            case 6: return { 0, 4, 5, 3 };
-            case 7: return { 5, 3, 0, 4 };
-            case 8: return { 0, 3, 0, 4 };
-            case 9: return { 0 };
-            case 0:
-            default:
-                // the classic trance progressions: Am F C G in minor, F G Am Am in major keys
-                return isMinor (sc, key) ? std::vector<int> { 0, 5, 2, 6 } : std::vector<int> { 5, 3, 0, 4 };
-        }
+        const auto& all = progressions();
+        if (index > 0 && index < (int) all.size())
+            return all[(size_t) index].degrees;
+        // Auto: the classic trance progressions: Am F C G in minor, F G Am Am in major keys
+        return isMinor (sc, key) ? std::vector<int> { 0, 5, 2, 6 } : std::vector<int> { 5, 3, 0, 4 };
     }
 
     std::string chordName (int degree, const ScaleContext& sc, int key)
@@ -400,7 +446,8 @@ namespace mm
         const int root = key + degreeToOffset (degree, sc, key);
         const int third = key + degreeToOffset (degree + 2, sc, key) - root;
         const int fifth = key + degreeToOffset (degree + 4, sc, key) - root;
-        std::string name = keyName (floorMod (root, 12));
+        static const char* flats[] = { "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B" };
+        std::string name = useFlats (sc, key) ? flats[floorMod (root, 12)] : keyName (floorMod (root, 12));
         if (third == 3 && fifth == 6)      name += "dim";
         else if (third == 4 && fifth == 8) name += "aug";
         else if (third == 3)               name += "m";

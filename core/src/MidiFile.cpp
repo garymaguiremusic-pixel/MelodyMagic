@@ -91,6 +91,8 @@ namespace mm
                     if (i >= end) break;
                     const auto type = b[i++];
                     const auto len = varLen();
+                    if (type == 0x03 && clip.trackName.empty() && i + len <= end)
+                        clip.trackName.assign ((const char*) &b[i], len);
                     if (type == 0x51 && len >= 3 && i + 3 <= end && ! tempoSet)
                     {
                         const std::uint32_t us = ((std::uint32_t) b[i] << 16) | ((std::uint32_t) b[i + 1] << 8) | b[i + 2];

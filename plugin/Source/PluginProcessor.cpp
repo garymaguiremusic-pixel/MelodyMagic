@@ -377,8 +377,18 @@ bool MelodyMagicProcessor::importMidiFile (const File& file, String& error)
 
     // like ArpSampler: the file's key becomes the Key + Scale (so Scale Lock can't bend its notes),
     // its notes are kept from the key's root in octave 3, and the arp plays them in Melody mode
+    // a pattern MelodyMagic saved carries its key and scale in the track name: no guessing
     int key = currentKey(), scale = currentScaleIndex();
-    mm::detectKey (clip, key, scale);
+    const String tag (clip.trackName);
+    if (tag.startsWith ("MelodyMagic key="))
+    {
+        key = jlimit (0, 11, tag.fromFirstOccurrenceOf ("key=", false, false).getIntValue());
+        scale = jlimit (0, mm::kNumScales - 1, tag.fromFirstOccurrenceOf ("scale=", false, false).getIntValue());
+    }
+    else
+    {
+        mm::detectKey (clip, key, scale);
+    }
     auto p = mm::patternFromMidi (clip, key, file.getFileNameWithoutExtension().toStdString());
     if (p.notes.empty())
     {
@@ -390,9 +400,7 @@ bool MelodyMagicProcessor::importMidiFile (const File& file, String& error)
     switchToMelodyMode();
     filePattern = p;
     fileName = file.getFileName();
-    const auto folder = getUserMidiFolder();
-    loadedLibraryKey = file.isAChildOf (folder) ? "My MIDI/" + file.getRelativePathFrom (folder).replaceCharacter ('\\', '/')
-                                                : String();
+    loadedLibraryKey = libraryKeyForFile (file);
     setPattern (p);
     return true;
 }
@@ -419,7 +427,31 @@ bool MelodyMagicProcessor::addMidiToLibrary (const File& file, String& error)
     return true;
 }
 
-File MelodyMagicProcessor::savePatternToLibrary (const String& name)
+File MelodyMagicProcessor::getUserPatternsFolder() const
+{
+    auto folder = File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("MelodyMagic").getChildFile ("User Patterns");
+    folder.createDirectory();
+    return folder;
+}
+
+File MelodyMagicProcessor::fileForLibraryKey (const String& key) const
+{
+    if (key.startsWith ("My MIDI/"))
+        return getUserMidiFolder().getChildFile (key.fromFirstOccurrenceOf ("My MIDI/", false, false));
+    return getUserPatternsFolder().getChildFile (key);
+}
+
+String MelodyMagicProcessor::libraryKeyForFile (const File& file) const
+{
+    const auto myMidi = getUserMidiFolder(), patterns = getUserPatternsFolder();
+    if (file.isAChildOf (myMidi))
+        return "My MIDI/" + file.getRelativePathFrom (myMidi).replaceCharacter ('\\', '/');
+    if (file.isAChildOf (patterns))
+        return file.getRelativePathFrom (patterns).replaceCharacter ('\\', '/');
+    return {};
+}
+
+File MelodyMagicProcessor::savePatternToLibrary (const String& name, const String& section)
 {
     const int root = 60 + currentKey();   // the key's root in octave 3, as Melody mode and import use
     mm::MidiClip clip;
@@ -437,11 +469,17 @@ File MelodyMagicProcessor::savePatternToLibrary (const String& name)
     auto safeName = File::createLegalFileName (name.trim());
     if (safeName.isEmpty())
         safeName = "Pattern";
-    const auto file = getUserMidiFolder().getNonexistentChildFile (safeName, ".mid", false);
-    if (! mm::writeMidiFile (file.getFullPathName().toStdString(), clip, safeName.toStdString()))
+
+    // "My MIDI" or a library folder such as "Factory/Arps" or "Phrases/kick101/Bass"
+    auto folder = section.isEmpty() || section == "My MIDI" ? getUserMidiFolder()
+                                                            : getUserPatternsFolder().getChildFile (section);
+    folder.createDirectory();
+    const auto file = folder.getNonexistentChildFile (safeName, ".mid", false);
+    const String tag = "MelodyMagic key=" + String (currentKey()) + " scale=" + String (currentScaleIndex()) + " " + safeName;
+    if (! mm::writeMidiFile (file.getFullPathName().toStdString(), clip, tag.toStdString()))
         return {};
     pattern.name = safeName.toStdString();
-    loadedLibraryKey = "My MIDI/" + file.getFileName();
+    loadedLibraryKey = libraryKeyForFile (file);
     sendChangeMessage();
     return file;
 }
@@ -549,8 +587,19 @@ void MelodyMagicProcessor::loadGlobalSettings()
 
     const auto defaultFolder = File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("MelodyMagic").getChildFile ("Library");
     libraryFolder = File (globalSettings->getValue ("libraryFolder", defaultFolder.getFullPathName()));
+    libraryTab = jlimit (0, 2, globalSettings->getIntValue ("libraryTab", 0));
+    libraryFolderShown = globalSettings->getValue ("libraryFolderShown");
     if (libraryFolder == defaultFolder)
         defaultFolder.createDirectory();
+}
+
+void MelodyMagicProcessor::setLibraryView (int tab, const String& folder)
+{
+    if (tab == libraryTab && folder == libraryFolderShown)
+        return;
+    libraryTab = tab;
+    libraryFolderShown = folder;
+    saveGlobalSettings();
 }
 
 void MelodyMagicProcessor::saveGlobalSettings()
@@ -558,6 +607,8 @@ void MelodyMagicProcessor::saveGlobalSettings()
     if (globalSettings != nullptr)
     {
         globalSettings->setValue ("libraryFolder", libraryFolder.getFullPathName());
+        globalSettings->setValue ("libraryTab", libraryTab);
+        globalSettings->setValue ("libraryFolderShown", libraryFolderShown);
         globalSettings->saveIfNeeded();
     }
 }
@@ -616,6 +667,8 @@ void MelodyMagicProcessor::getStateInformation (MemoryBlock& destData)
 
     ValueTree ui ("UI");
     ui.setProperty ("EditorWidth", editorWidth.load(), nullptr);
+    ui.setProperty ("Library_Tab", libraryTab, nullptr);
+    ui.setProperty ("Library_Folder", libraryFolderShown, nullptr);
     ui.setProperty ("Custom_Mask", (int) customMask.load(), nullptr);
     root.appendChild (ui, nullptr);
 
@@ -693,6 +746,8 @@ void MelodyMagicProcessor::setStateInformation (const void* data, int sizeInByte
     if (ui.isValid())
     {
         editorWidth.store ((int) ui.getProperty ("EditorWidth", 0));
+        libraryTab = jlimit (0, 2, (int) ui.getProperty ("Library_Tab", libraryTab));
+        libraryFolderShown = ui.getProperty ("Library_Folder", libraryFolderShown).toString();
         customMask.store ((std::uint16_t) ((int) ui.getProperty ("Custom_Mask", 0x0fff) & 0x0fff));
     }
 

@@ -49,6 +49,21 @@ TEST_CASE ("Scale degrees and chord names", "[melody]")
 
     CHECK (progressionDegrees (0, am, 9) == std::vector<int> { 0, 5, 2, 6 });   // Am F C G
     CHECK (progressionDegrees (0, c, 0) == std::vector<int> { 5, 3, 0, 4 });    // Am F C G in C major
+
+    // flats in flat keys: G minor = Gm Eb Bb F, not D# A#
+    const auto gm = ScaleContext::make (NaturalMinor, 7);
+    CHECK (chordName (5, gm, 7) == "Eb");
+    CHECK (chordName (2, gm, 7) == "Bb");
+    CHECK (chordName (0, gm, 7) == "Gm");
+    CHECK (chordName (6, gm, 7) == "F");
+
+    // every progression has chords, and the darker ones are there
+    REQUIRE (progressionNames().size() >= 25);
+    for (int i = 1; i < (int) progressionNames().size(); ++i)
+        CHECK (! progressionDegrees (i, am, 9).empty());
+    int dark = 0;
+    for (auto& n : progressionNames()) if (n.rfind ("Dark", 0) == 0) ++dark;
+    CHECK (dark >= 10);
 }
 
 TEST_CASE ("Melodies follow the rules: in key, chord tones on the beat, a repeated hook", "[melody]")

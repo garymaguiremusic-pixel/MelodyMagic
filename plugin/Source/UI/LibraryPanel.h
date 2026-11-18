@@ -43,7 +43,8 @@ private:
         void selectedRowsChanged (int row) override;
     };
 
-    void setCategory (int);
+    void setCategory (int, bool resetFolder = true);
+    void addUserFiles (const juce::String& section);
     void rebuildKeys();
     void rebuildFiles();
     void loadEntry (int row);
@@ -68,4 +69,6 @@ private:
                      importButton { "Import..." }, saveButton { "Save..." };
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::AlertWindow> saveDialog;
+    std::vector<juce::String> saveSections;
+    bool rebuilding = false;
 };

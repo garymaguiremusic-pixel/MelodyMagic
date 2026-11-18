@@ -13,6 +13,7 @@ namespace mm
     {
         int ppq = 96;
         double bpm = 120.0;           // first tempo event (120 if none)
+        std::string trackName;        // first track name meta event
         std::vector<TimedNote> notes; // sorted by start, then note
 
         /** Same notes at another resolution. */
@@ -20,7 +21,8 @@ namespace mm
         double lengthTicks() const noexcept;
     };
 
-    /** Reads format 0 / 1 SMF. Returns false on malformed data. */
+    /** Reads format 0 / 1 SMF: notes only (controllers, pitch bend, aftertouch, program changes
+        and SysEx are skipped). Returns false on malformed data. */
     bool readMidi (const std::vector<std::uint8_t>& bytes, MidiClip&, std::string* error = nullptr);
     bool readMidiFile (const std::string& path, MidiClip&, std::string* error = nullptr);
 

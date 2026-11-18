@@ -16,6 +16,14 @@ namespace
 
     String folderOfKey (const String& key)   { return key.upToLastOccurrenceOf ("/", false, false); }
 
+    /** What a folder is called in the lists: its last part ("Phrases/kick101/Bass" -> "Bass"). */
+    String shortFolder (const String& folder)
+    {
+        return folder.containsChar ('/') ? folder.fromLastOccurrenceOf ("/", false, false) : folder;
+    }
+
+    bool isUserFile (const String& key)      { return key.endsWithIgnoreCase (".mid") || key.endsWithIgnoreCase (".midi"); }
+
     const char* categoryNames[] = { "Factory", "Phrases", "My MIDI" };
 }
 
@@ -31,7 +39,7 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     }
     categoryButtons[Factory].setTooltip ("Built-in patterns");
     categoryButtons[Phrases].setTooltip ("Patterns from your library folder");
-    categoryButtons[MyMidi].setTooltip ("Your own MIDI files: Import... adds them, Save... stores the current pattern");
+    categoryButtons[MyMidi].setTooltip ("Your own MIDI files: Import... adds them");
 
     for (auto* list : { &folderList, &fileList })
     {
@@ -70,7 +78,7 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     rescanButton.onClick = [this] { if (category == MyMidi) rebuildKeys(); else proc.rescanLibrary(); };
     importButton.setTooltip ("Add MIDI files to My MIDI (they are copied into Documents/MelodyMagic/My MIDI) and load the first");
     importButton.onClick = [this] { importFiles(); };
-    saveButton.setTooltip ("Save the current pattern into My MIDI");
+    saveButton.setTooltip ("Save the current pattern as MIDI into My MIDI or any Factory / Phrases folder (Arps, Bass ...)");
     saveButton.onClick = [this] { savePattern(); };
     for (auto* b : { &randomiseButton, &shuffleButton, &folderButton, &rescanButton, &importButton, &saveButton })
     {
@@ -80,7 +88,9 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     for (auto& b : categoryButtons)
         b.setWantsKeyboardFocus (false);
 
-    setCategory (Factory);
+    // back where you were when the window was closed
+    selectedFolder = proc.libraryFolderShown;
+    setCategory (proc.libraryTab, false);
 }
 
 LibraryPanel::~LibraryPanel()
@@ -103,19 +113,32 @@ void LibraryPanel::refresh()
     repaint();
 }
 
-void LibraryPanel::setCategory (int c)
+void LibraryPanel::setCategory (int c, bool resetFolder)
 {
-    category = c;
+    category = jlimit (0, (int) NumCategories - 1, c);
+    c = category;
     for (int i = 0; i < NumCategories; ++i)
         categoryButtons[(size_t) i].setToggleState (i == c, dontSendNotification);
     folderButton.setVisible (c == Phrases);
     rescanButton.setVisible (c != Factory);
     importButton.setVisible (c == MyMidi);
-    saveButton.setVisible (c == MyMidi);
-    selectedFolder = {};
+    saveButton.setVisible (true);
+    if (resetFolder)
+        selectedFolder = {};
     lib = proc.getLibrary();
     rebuildKeys();
     resized();
+    proc.setLibraryView (category, selectedFolder);
+}
+
+void LibraryPanel::addUserFiles (const String& section)
+{
+    // MIDI saved into a Factory / Phrases folder lives in Documents/MelodyMagic/User Patterns/<section>/...
+    const auto root = proc.getUserPatternsFolder().getChildFile (section);
+    if (! root.isDirectory())
+        return;
+    for (const auto& entry : RangedDirectoryIterator (root, true, "*.mid;*.midi", File::findFiles))
+        allKeys.push_back (proc.libraryKeyForFile (entry.getFile()));
 }
 
 void LibraryPanel::rebuildKeys()
@@ -125,6 +148,7 @@ void LibraryPanel::rebuildKeys()
     {
         for (auto& kv : mmp::factoryPatterns())
             allKeys.push_back (String (kv.first));
+        addUserFiles ("Factory");
     }
     else if (category == MyMidi)
     {
@@ -135,7 +159,10 @@ void LibraryPanel::rebuildKeys()
     else if (lib != nullptr)
     {
         for (auto& kv : lib->phrases) allKeys.push_back (String::fromUTF8 (kv.first.c_str()));
+        addUserFiles ("Phrases");
     }
+    if (category == Phrases && lib == nullptr)
+        addUserFiles ("Phrases");
 
     folders.clear();
     folders.push_back ("All");
@@ -151,8 +178,13 @@ void LibraryPanel::rebuildKeys()
     for (int i = 0; i < (int) folders.size(); ++i)
         if (folders[(size_t) i] == selectedFolder)
             folderRow = i;
-    folderList.selectRow (folderRow, false, true);
-    selectedFolder = folders[(size_t) folderRow];
+    {
+        // keep the remembered folder even while the library is still loading
+        const ScopedValueSetter<bool> svs (rebuilding, true);
+        folderList.selectRow (folderRow, false, true);
+    }
+    if (folderRow > 0 || folders.size() > 1)
+        selectedFolder = folders[(size_t) folderRow];
     rebuildFiles();
 }
 
@@ -186,7 +218,7 @@ String LibraryPanel::currentKey() const
 
 File LibraryPanel::userFileFor (const String& key) const
 {
-    return proc.getUserMidiFolder().getChildFile (key.fromFirstOccurrenceOf ("My MIDI/", false, false));
+    return proc.fileForLibraryKey (key);
 }
 
 void LibraryPanel::importFiles()
@@ -205,7 +237,7 @@ void LibraryPanel::importFiles()
                                   if (! proc.addMidiToLibrary (results[i], error))
                                       failed.add (results[i].getFileName() + ": " + error);
                               }
-                              setCategory (MyMidi);
+                              setCategory (MyMidi, false);
                               if (failed.size() > 0)
                                   AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Import MIDI", failed.joinIntoString ("\n"));
                           });
@@ -213,18 +245,57 @@ void LibraryPanel::importFiles()
 
 void LibraryPanel::savePattern()
 {
-    saveDialog = std::make_unique<AlertWindow> ("Save to My MIDI", "Name for the pattern:", MessageBoxIconType::NoIcon);
-    saveDialog->addTextEditor ("name", String (proc.getPattern().name));
+    // where it can go: My MIDI, and every Factory and Phrases folder
+    saveSections.clear();
+    StringArray labels;
+    saveSections.push_back ("My MIDI");
+    labels.add ("My MIDI");
+    StringArray factoryFolders, phraseFolders;
+    for (auto& kv : mmp::factoryPatterns())
+        factoryFolders.addIfNotAlreadyThere (folderOfKey (String (kv.first)));
+    if (lib != nullptr)
+        for (auto& kv : lib->phrases)
+            phraseFolders.addIfNotAlreadyThere (folderOfKey (String::fromUTF8 (kv.first.c_str())));
+    factoryFolders.sortNatural();
+    phraseFolders.sortNatural();
+    for (auto& f : factoryFolders) { saveSections.push_back (f); labels.add ("Factory > " + shortFolder (f)); }
+    for (auto& f : phraseFolders)  { saveSections.push_back (f); labels.add ("Phrases > " + shortFolder (f)); }
+
+    // start on the folder you are looking at
+    int current = 0;
+    for (int i = 0; i < (int) saveSections.size(); ++i)
+        if (saveSections[(size_t) i] == selectedFolder)
+            current = i;
+    if (current == 0 && category != MyMidi)
+        for (int i = 1; i < (int) saveSections.size(); ++i)
+            if (saveSections[(size_t) i].startsWith (category == Factory ? "Factory/" : "Phrases/"))
+            {
+                current = i;
+                break;
+            }
+
+    saveDialog = std::make_unique<AlertWindow> ("Save Pattern", "Save the pattern as MIDI:", MessageBoxIconType::NoIcon);
+    saveDialog->addTextEditor ("name", String (proc.getPattern().name), "Name");
+    saveDialog->addComboBox ("section", labels, "Save to");
+    if (auto* box = saveDialog->getComboBoxComponent ("section"))
+        box->setSelectedItemIndex (current, dontSendNotification);
     saveDialog->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
     saveDialog->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
     saveDialog->enterModalState (true, ModalCallbackFunction::create ([this] (int result)
     {
         if (result == 1 && saveDialog != nullptr)
         {
-            const auto file = proc.savePatternToLibrary (saveDialog->getTextEditorContents ("name"));
+            int index = 0;
+            if (auto* box = saveDialog->getComboBoxComponent ("section"))
+                index = jmax (0, box->getSelectedItemIndex());
+            const auto section = saveSections[(size_t) jmin (index, (int) saveSections.size() - 1)];
+            const auto file = proc.savePatternToLibrary (saveDialog->getTextEditorContents ("name"), section);
             if (file == File())
                 AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Save", "Could not write the file.");
-            setCategory (MyMidi);
+
+            // show where it went
+            selectedFolder = section == "My MIDI" ? String() : section;
+            setCategory (section == "My MIDI" ? MyMidi : (section.startsWith ("Factory/") ? Factory : Phrases), false);
         }
         saveDialog.reset();
     }), false);
@@ -237,7 +308,7 @@ void LibraryPanel::showItemMenu (int row)
     const auto key = files[(size_t) row];
     PopupMenu menu;
     menu.addItem ("Load", [this, row] { loadEntry (row); });
-    if (category == MyMidi)
+    if (isUserFile (key))
     {
         menu.addItem ("Show in folder", [this, key] { userFileFor (key).revealToUser(); });
         menu.addSeparator();
@@ -265,17 +336,20 @@ void LibraryPanel::loadEntry (int row)
     const auto key = files[(size_t) row];
     const auto k = key.toStdString();
 
-    if (category == Factory)
-    {
-        proc.loadedLibraryKey = key;
-        proc.setPattern (mmp::factoryPatterns().at (k));
-        return;
-    }
-    if (category == MyMidi)
+    if (isUserFile (key))   // your own MIDI: My MIDI, or saved into a Factory / Phrases folder
     {
         String error;
         if (! proc.importMidiFile (userFileFor (key), error))
             AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Load MIDI", key + "\n" + error);
+        return;
+    }
+    if (category == Factory)
+    {
+        if (auto it = mmp::factoryPatterns().find (k); it != mmp::factoryPatterns().end())
+        {
+            proc.loadedLibraryKey = key;
+            proc.setPattern (it->second);
+        }
         return;
     }
     if (lib == nullptr)
@@ -303,8 +377,8 @@ void LibraryPanel::FolderModel::paintListBoxItem (int row, Graphics& g, int w, i
         g.fillRect (0, 0, w, h);
     }
     auto text = owner.folders[(size_t) row];
-    if (text != "All" && text.containsChar ('/'))
-        text = text.fromFirstOccurrenceOf ("/", false, false);   // drop the common top folder
+    if (text != "All")
+        text = shortFolder (text);   // "Phrases/kick101/Bass" -> "Bass"
     g.setFont (CustomLookAndFeel::uiFont (12.0f, row == 0));
     g.setColour (selected ? Colours::white : Colour (0xffdfe3e6));
     g.drawFittedText (text, 6, 0, w - 8, h, Justification::centredLeft, 1, 0.8f);
@@ -315,6 +389,8 @@ void LibraryPanel::FolderModel::selectedRowsChanged (int row)
     if (row < 0 || row >= (int) owner.folders.size())
         return;
     owner.selectedFolder = owner.folders[(size_t) row];
+    if (! owner.rebuilding)
+        owner.proc.setLibraryView (owner.category, owner.selectedFolder);
     owner.rebuildFiles();
 }
 
@@ -339,7 +415,7 @@ void LibraryPanel::FileModel::paintListBoxItem (int row, Graphics& g, int w, int
     {
         g.setFont (CustomLookAndFeel::uiFont (10.5f));
         g.setColour (VirusColours::labelText.withAlpha (0.7f));
-        g.drawFittedText (folderOfKey (key), w / 2, 0, w / 2 - 6, h, Justification::centredRight, 1, 0.7f);
+        g.drawFittedText (shortFolder (folderOfKey (key)), w / 2, 0, w / 2 - 6, h, Justification::centredRight, 1, 0.7f);
     }
 }
 
@@ -374,7 +450,7 @@ void LibraryPanel::paint (Graphics& g)
     else if (category == Phrases && allKeys.empty())
         status = "Empty: click Folder... and choose the folder holding nora_fas_library.json (or .fas files)";
     else if (category == MyMidi && allKeys.empty())
-        status = "No MIDI yet: Import... adds .mid files, Save... stores the current pattern (right-click an entry to delete it)";
+        status = "No MIDI yet: Import... adds .mid files, Save... stores the current pattern here or in any folder (right-click to delete)";
     else
         status = String ((int) files.size()) + " of " + String ((int) allKeys.size());
 
