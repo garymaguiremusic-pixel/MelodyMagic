@@ -7,7 +7,8 @@
 
 namespace mm
 {
-    PlayPattern makePlayPattern (const Pattern& pattern, const Groove* groove, double startStrength, double endStrength, bool link)
+    PlayPattern makePlayPattern (const Pattern& pattern, const Groove* groove, double startStrength, double endStrength, bool link,
+                                 double gate)
     {
         auto p = pattern;
         p.sort();
@@ -23,6 +24,8 @@ namespace mm
             pn.start = n.start;
             pn.end = n.end;
             quantizeNote (pn.start, pn.end, pp.clip.length, groove, startStrength, endStrength, link);
+            if (gate < 1.0)
+                pn.end = pn.start + std::max (1.0, (pn.end - pn.start) * std::max (0.01, gate));
             if (pn.start >= pp.clip.length || pn.end <= pn.start)
                 continue;
             pp.clip.notes.push_back (pn);

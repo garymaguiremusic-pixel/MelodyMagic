@@ -87,7 +87,8 @@ private:
     MidiMonitor monitor;
     HelpButton helpButton;
     HelpOverlay helpOverlay;
-    juce::TooltipWindow tooltipWindow { this, 600 };
+    std::unique_ptr<juce::TooltipWindow> tooltipWindow;
+    juce::TextButton tipsButton { "Tips" };
     std::unique_ptr<juce::FileChooser> chooser;
 
     // Attachments (declared after the controls so they are destroyed first)

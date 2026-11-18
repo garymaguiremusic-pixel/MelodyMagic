@@ -39,7 +39,9 @@ namespace mm
         std::vector<int> offset, step;
     };
 
-    PlayPattern makePlayPattern (const Pattern&, const Groove* groove, double startStrength, double endStrength, bool link);
+    /** gate: note length as a share of the drawn length (1 = as drawn), applied after the groove. */
+    PlayPattern makePlayPattern (const Pattern&, const Groove* groove, double startStrength, double endStrength, bool link,
+                                 double gate = 1.0);
 
     /** Counts sounding output notes so they can always be switched off. */
     class OutputTracker

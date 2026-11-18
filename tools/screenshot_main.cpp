@@ -148,7 +148,8 @@ int main (int argc, char** argv)
                          inOrder ? "YES" : "NO", rhythmOf (proc->getPattern()) != rhythmOf (before2) ? "NEW" : "SAME");
         }
 
-        // 3. import a G minor lead while the plugin is in A minor: it must play back exactly
+        // 3. import a G minor lead while the plugin is in A minor: the key must stay A minor and
+        //    the line must come in moved up a tone (same shape), at its timing and velocities
         mm::MidiClip clip;
         clip.ppq = 480;
         const int line[] = { 79, 82, 86, 84, 82, 81, 79, 74, 79, 77, 75, 74, 72, 74, 75, 70 };
@@ -156,21 +157,33 @@ int main (int argc, char** argv)
             clip.notes.push_back ({ line[i], 80 + i * 2, 1, 1920.0 + i * 240.0, 1920.0 + i * 240.0 + 200.0 });
         const auto src = File::getSpecialLocation (File::tempDirectory).getChildFile ("mm_test_gminor.mid");
         mm::writeMidiFile (src.getFullPathName().toStdString(), clip);
+        if (auto* kp = proc->apvts.getParameter (mmp::ParamIDs::scaleKey)) kp->setValueNotifyingHost (kp->convertTo0to1 (9.0f));
+        if (auto* sp = proc->apvts.getParameter (mmp::ParamIDs::scaleIndex)) sp->setValueNotifyingHost (sp->convertTo0to1 (1.0f));
         String error;
         const bool ok = proc->addMidiToLibrary (src, error);
-        std::printf ("import: %s %s -> key %s %s, arp mode %s\n", ok ? "OK" : "FAILED", error.toRawUTF8(),
+        std::printf ("import: %s %s -> key stays %s %s, arp mode %s\n", ok ? "OK" : "FAILED", error.toRawUTF8(),
                      mm::keyName (proc->currentKey()), mm::scaleName (proc->currentScaleIndex()),
                      mm::arpOrderName ((mm::ArpOrder) roundToInt (proc->apvts.getRawParameterValue (mmp::ParamIDs::arpMode)->load())));
         const auto rendered = proc->renderMidiFile();
         mm::MidiClip back;
         mm::readMidiFile (rendered.getFullPathName().toStdString(), back);
         auto b96 = back.rescaled (96);
+        const auto gm = mm::ScaleContext::make (mm::NaturalMinor, 7), am = mm::ScaleContext::make (mm::NaturalMinor, 9);
         int match = 0;
         for (int i = 0; i < 16 && i < (int) b96.notes.size(); ++i)
-            if (b96.notes[(size_t) i].note == line[i] && std::abs (b96.notes[(size_t) i].start - i * 48.0) < 0.01
-                && b96.notes[(size_t) i].vel == 80 + i * 2)
+            if (b96.notes[(size_t) i].note == mm::transposeBetweenKeys (line[i], gm, 7, am, 9)
+                && std::abs (b96.notes[(size_t) i].start - i * 48.0) < 0.01 && b96.notes[(size_t) i].vel == 80 + i * 2)
                 ++match;
-        std::printf ("import plays back: %d of 16 notes identical (pitch, time, velocity)\n", match);
+        std::printf ("import in A minor: %d of 16 notes = the G minor line moved into A minor (time, velocity kept)\n", match);
+
+        // Gate 50 %: the notes that play are half as long
+        if (auto* gp = proc->apvts.getParameter (mmp::ParamIDs::genGate)) gp->setValueNotifyingHost (gp->convertTo0to1 (50.0f));
+        MessageManager::getInstance()->runDispatchLoopUntil (200);
+        const auto gated = proc->renderMidiFile();
+        mm::MidiClip gclip;
+        mm::readMidiFile (gated.getFullPathName().toStdString(), gclip);
+        const auto g96 = gclip.rescaled (96);
+        std::printf ("gate 50%%: first note %.1f ticks (drawn 40)\n", g96.notes.empty() ? -1.0 : g96.notes[0].end - g96.notes[0].start);
         File (src).deleteFile();
 
         // save into a library section, change the key, load it back: same notes, its own key
@@ -178,12 +191,13 @@ int main (int argc, char** argv)
         const auto saved = proc->savePatternToLibrary ("Saved Arp", "Factory/Arps");
         std::printf ("saved into Factory/Arps: %s -> key %s\n", saved.existsAsFile() ? "OK" : "FAILED",
                      proc->libraryKeyForFile (saved).toRawUTF8());
-        if (auto* kp = proc->apvts.getParameter (mmp::ParamIDs::scaleKey)) kp->setValueNotifyingHost (kp->convertTo0to1 (0.0f));
-        if (auto* sp = proc->apvts.getParameter (mmp::ParamIDs::scaleIndex)) sp->setValueNotifyingHost (sp->convertTo0to1 (0.0f));
         String err2;
         proc->importMidiFile (saved, err2);
-        std::printf ("reloaded: key %s %s, notes %s\n", mm::keyName (proc->currentKey()), mm::scaleName (proc->currentScaleIndex()),
-                     proc->getPattern().notes == before.notes ? "IDENTICAL" : "DIFFERENT");
+        std::printf ("reloaded in the same key: notes %s\n", proc->getPattern().notes == before.notes ? "IDENTICAL" : "DIFFERENT");
+        if (auto* kp = proc->apvts.getParameter (mmp::ParamIDs::scaleKey)) kp->setValueNotifyingHost (kp->convertTo0to1 (0.0f));
+        if (auto* sp = proc->apvts.getParameter (mmp::ParamIDs::scaleIndex)) sp->setValueNotifyingHost (sp->convertTo0to1 (0.0f));
+        proc->importMidiFile (saved, err2);
+        std::printf ("reloaded after switching to C major: key stays %s %s\n", mm::keyName (proc->currentKey()), mm::scaleName (proc->currentScaleIndex()));
         saved.deleteFile();
         proc->getUserMidiFolder().getChildFile ("mm_test_gminor.mid").deleteFile();
         MessageManager::getInstance()->runDispatchLoopUntil (100);

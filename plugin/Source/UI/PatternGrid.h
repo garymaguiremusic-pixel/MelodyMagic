@@ -94,4 +94,5 @@ private:
     double dragStartTick = 0.0;
     int dragStartOffset = 0;
     double playhead = -1.0;
+    int lastGate = -1;
 };

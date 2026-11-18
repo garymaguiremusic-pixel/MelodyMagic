@@ -136,4 +136,35 @@ namespace mm
         return p;
     }
 
+
+    int transposeBetweenKeys (int note, const ScaleContext& from, int fromKey, const ScaleContext& to, int toKey) noexcept
+    {
+        fromKey = floorMod (fromKey, 12);
+        toKey = floorMod (toKey, 12);
+        int shift = floorMod (toKey - fromKey, 12);
+        if (shift > 6)
+            shift -= 12;
+
+        int a[12], b[12], na = 0, nb = 0;
+        for (int pc = 0; pc < 12; ++pc)
+        {
+            if (from.inScale (fromKey + pc)) a[na++] = pc;
+            if (to.inScale (toKey + pc))     b[nb++] = pc;
+        }
+
+        const int pc = floorMod (note - fromKey, 12);
+        int newPc = pc;
+        for (int i = 0; i < na; ++i)
+            if (a[i] == pc && nb > 0)
+            {
+                const int j = na == nb ? i : std::clamp ((int) ((double) i * nb / na + 0.5), 0, nb - 1);
+                newPc = b[j];
+                break;
+            }
+
+        int result = note - pc + newPc + shift;
+        while (result < 0)   result += 12;
+        while (result > 127) result -= 12;
+        return result;
+    }
 }

@@ -254,15 +254,17 @@ void MelodyMagicProcessor::rebuildPlayPattern()
     lastQStart = param (mmp::ParamIDs::quantizeStart);
     lastQEnd = param (mmp::ParamIDs::quantizeEnd);
     lastQLink = param (mmp::ParamIDs::quantizeLink);
+    lastGate = param (mmp::ParamIDs::genGate);
     auto pp = std::make_shared<mm::PlayPattern> (mm::makePlayPattern (pattern, groove ? &*groove : nullptr,
-                                                                     lastQStart / 100.0, lastQEnd / 100.0, lastQLink != 0));
+                                                                     lastQStart / 100.0, lastQEnd / 100.0, lastQLink != 0,
+                                                                     lastGate / 100.0));
     publish<mm::PlayPattern> (livePattern, std::move (pp), graveyard);
 }
 
 void MelodyMagicProcessor::timerCallback()
 {
     if (param (mmp::ParamIDs::quantizeStart) != lastQStart || param (mmp::ParamIDs::quantizeEnd) != lastQEnd
-        || param (mmp::ParamIDs::quantizeLink) != lastQLink)
+        || param (mmp::ParamIDs::quantizeLink) != lastQLink || param (mmp::ParamIDs::genGate) != lastGate)
         rebuildPlayPattern();
 
     // copies the audio thread no longer uses are freed here, never on the audio thread
@@ -280,7 +282,7 @@ mm::MelodySettings MelodyMagicProcessor::melodySettings() const
     m.progression = param (mmp::ParamIDs::genProgression);
     m.density = param (mmp::ParamIDs::genDensity);
     m.range = param (mmp::ParamIDs::genRange);
-    m.gate = param (mmp::ParamIDs::genGate);
+    m.gate = 85;   // the Gate knob shortens notes live (see rebuildPlayPattern)
     return m;
 }
 
@@ -375,8 +377,9 @@ bool MelodyMagicProcessor::importMidiFile (const File& file, String& error)
         return false;
     }
 
-    // like ArpSampler: the file's key becomes the Key + Scale (so Scale Lock can't bend its notes),
-    // its notes are kept from the key's root in octave 3, and the arp plays them in Melody mode
+    // The Key + Scale stay as you set them: the file is moved into them (shortest move, each note
+    // keeping its place in the scale, as ArpSampler does), so Scale Lock never changes while you
+    // browse files. Its notes are kept from the key's root in octave 3; the arp plays them in Melody mode.
     // a pattern MelodyMagic saved carries its key and scale in the track name: no guessing
     int key = currentKey(), scale = currentScaleIndex();
     const String tag (clip.trackName);
@@ -389,14 +392,16 @@ bool MelodyMagicProcessor::importMidiFile (const File& file, String& error)
     {
         mm::detectKey (clip, key, scale);
     }
-    auto p = mm::patternFromMidi (clip, key, file.getFileNameWithoutExtension().toStdString());
+    const auto fileScale = mm::ScaleContext::make (scale, key, getCustomMask());
+    const auto ourScale = currentScale();
+    for (auto& n : clip.notes)
+        n.note = mm::transposeBetweenKeys (n.note, fileScale, key, ourScale, currentKey());
+    auto p = mm::patternFromMidi (clip, currentKey(), file.getFileNameWithoutExtension().toStdString());
     if (p.notes.empty())
     {
         error = "No notes in the first " + String (mm::kMaxBars) + " bars.";
         return false;
     }
-    setParam (mmp::ParamIDs::scaleKey, (float) key);
-    setParam (mmp::ParamIDs::scaleIndex, (float) scale);
     switchToMelodyMode();
     filePattern = p;
     fileName = file.getFileName();
@@ -518,7 +523,8 @@ File MelodyMagicProcessor::renderMidiFile()
     auto s = readSettings();
     s.bypassed = false;
     mm::JuceLcg r (mm::JuceLcg::timeSeed());
-    const auto play = mm::makePlayPattern (pattern, groove ? &*groove : nullptr, lastQStart / 100.0, lastQEnd / 100.0, lastQLink != 0);
+    const auto play = mm::makePlayPattern (pattern, groove ? &*groove : nullptr, lastQStart / 100.0, lastQEnd / 100.0, lastQLink != 0,
+                                          param (mmp::ParamIDs::genGate) / 100.0);
 
     mm::MidiClip clip;
     clip.ppq = mm::kPhrasePpq;
@@ -588,6 +594,7 @@ void MelodyMagicProcessor::loadGlobalSettings()
     const auto defaultFolder = File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("MelodyMagic").getChildFile ("Library");
     libraryFolder = File (globalSettings->getValue ("libraryFolder", defaultFolder.getFullPathName()));
     libraryTab = jlimit (0, 2, globalSettings->getIntValue ("libraryTab", 0));
+    showTooltips = globalSettings->getBoolValue ("showTooltips", true);
     libraryFolderShown = globalSettings->getValue ("libraryFolderShown");
     if (libraryFolder == defaultFolder)
         defaultFolder.createDirectory();
@@ -602,12 +609,19 @@ void MelodyMagicProcessor::setLibraryView (int tab, const String& folder)
     saveGlobalSettings();
 }
 
+void MelodyMagicProcessor::setShowTooltips (bool on)
+{
+    showTooltips = on;
+    saveGlobalSettings();
+}
+
 void MelodyMagicProcessor::saveGlobalSettings()
 {
     if (globalSettings != nullptr)
     {
         globalSettings->setValue ("libraryFolder", libraryFolder.getFullPathName());
         globalSettings->setValue ("libraryTab", libraryTab);
+        globalSettings->setValue ("showTooltips", showTooltips);
         globalSettings->setValue ("libraryFolderShown", libraryFolderShown);
         globalSettings->saveIfNeeded();
     }

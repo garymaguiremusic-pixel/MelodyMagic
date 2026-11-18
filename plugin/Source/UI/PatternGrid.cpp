@@ -20,13 +20,34 @@ PatternGrid::PatternGrid (MelodyMagicProcessor& p) : proc (p)
 //==============================================================================
 void PatternGrid::computeRange()
 {
+    // Always the same zoom: two octaves of rows (25), centred on the notes. Only a pattern
+    // wider than that makes the view taller.
     const auto& pt = proc.getPattern();
-    int lo = -12, hi = 12;
+    constexpr int span = 24;
+    int lo = 1000, hi = -1000;
     for (auto& n : pt.notes)
     {
-        lo = jmin (lo, n.offset - 2);
-        hi = jmax (hi, n.offset + 2);
+        lo = jmin (lo, n.offset);
+        hi = jmax (hi, n.offset);
     }
+    if (lo > hi)
+    {
+        lo = -12;
+        hi = 12;
+    }
+    if (hi - lo + 2 <= span)
+    {
+        const int centre = (lo + hi + 1) / 2;
+        lo = centre - span / 2;
+        hi = lo + span;
+    }
+    else
+    {
+        lo -= 1;
+        hi += 1;
+    }
+    if (lo < -mm::kMaxOffset) { hi += -mm::kMaxOffset - lo; lo = -mm::kMaxOffset; }
+    if (hi > mm::kMaxOffset)  { lo -= hi - mm::kMaxOffset; hi = mm::kMaxOffset; }
     bottom = jmax (-mm::kMaxOffset, lo);
     top = jmin (mm::kMaxOffset, hi);
     length = pt.lengthTicks();
@@ -187,6 +208,7 @@ void PatternGrid::resized()
 
 void PatternGrid::paint (Graphics& g)
 {
+    const double gate = jlimit (0.1, 1.0, proc.gatePercent() / 100.0);
     const auto& pt = proc.getPattern();
     const auto scale = proc.currentScale();
     const int key = proc.currentKey();
@@ -248,8 +270,15 @@ void PatternGrid::paint (Graphics& g)
         const float v = (float) n.velocity / 127.0f;
         const auto c1 = VirusColours::blue.withMultipliedBrightness (0.55f + 0.45f * v);
         const auto c2 = VirusColours::blueGlow.withMultipliedBrightness (0.45f + 0.4f * v);
+        // Gate: the part that plays is solid, the rest of the drawn length is faint
+        const auto played = r.withWidth (jmax (3.0f, r.getWidth() * (float) gate));
+        if (gate < 0.999)
+        {
+            g.setColour (c1.withAlpha (0.22f));
+            g.fillRoundedRectangle (r, 2.0f);
+        }
         g.setGradientFill (ColourGradient (isSel ? c1.brighter (0.35f) : c1, 0.0f, r.getY(), isSel ? c2.brighter (0.35f) : c2, 0.0f, r.getBottom(), false));
-        g.fillRoundedRectangle (r, 2.0f);
+        g.fillRoundedRectangle (played, 2.0f);
         g.setColour (isSel ? Colours::white : Colours::black.withAlpha (0.7f));
         g.drawRoundedRectangle (r, 2.0f, isSel ? 1.4f : 1.0f);
 
@@ -302,6 +331,11 @@ void PatternGrid::paint (Graphics& g)
 
 void PatternGrid::timerCallback()
 {
+    if (proc.gatePercent() != lastGate)
+    {
+        lastGate = proc.gatePercent();
+        repaint();
+    }
     const double pos = proc.playPosition.load();
     if (std::abs (pos - playhead) > 0.01)
     {

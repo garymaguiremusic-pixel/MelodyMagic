@@ -47,6 +47,8 @@ MelodyMagic takes MIDI in and sends MIDI out; it makes no sound itself. It loads
 
 Drawing is **locked to the Key + Scale**: new or dragged notes snap to the nearest scale note, and the mouse wheel and Up/Down move to the next scale note. Hold **Alt** to place or move by a free semitone.
 
+The display always uses the same zoom: two octaves of rows, centred on the notes.
+
 **Length** (1, 2, 4 or 8 bars) copies the pattern into the new bars (1 → 2 bars plays it twice). **Snap**, **Clear**, **Undo** and **Redo** are around the pattern.
 
 **Arp.**
@@ -73,7 +75,8 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
   * notes on the beat are chord tones, and the notes in between move by scale step (passing and neighbour notes), with the odd leap;
   * a one-bar hook repeats over each chord, moved to fit it, and an answer bar ends the phrase (4 bars = A A A B, 8 bars = A A A B A A A C);
   * rhythms come from classic trance lead rhythms (offbeat, 3-3-2, rolling, gallop and others).
-  * **Density** sets how busy the rhythm is, **Range** how far the melody spreads, and **Gate** the note length.
+  * **Density** sets how busy the rhythm is, and **Range** how far the melody spreads.
+* **Gate** shortens every note as it plays, live and in Drag MIDI (100 % = as drawn). The pattern keeps its notes; the faint end of each note in the display is the part the Gate cuts off.
 * **New Melody** writes new notes. The pattern (rhythm) stays exactly as it is, and the melody stays in the pattern's register, from its lowest note up.
 * **Top Notes Only** makes New Melody keep the bottom notes (the pattern's lowest note and the lower notes of chords) and change only the notes above them. On a pattern that is all one note, the notes on the beat stay as a pedal and the ones in between become the melody.
 * **New Pattern** writes a new rhythm. The notes stay, in the same order.
@@ -88,7 +91,7 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
 * **Factory:** the built-in patterns.
 * **Phrases:** the library folder (**Folder...**). A phrase's rows become chord notes of your key (1st, 3rd, 5th of the scale), and loading one switches the Arp to Melody mode. It holds `nora_fas_library.json` or `.fas` files; these are not in this repository, because their pack asks that they not be redistributed.
 * **My MIDI:** your own MIDI files, kept in `Documents\MelodyMagic\My MIDI`. **Import...** copies `.mid` files in and loads them. Importing reads **notes only**: controllers (CC), pitch bend, aftertouch, program changes and SysEx are ignored. Right-click an entry to delete it or show it in Explorer.
-* **Save...** (any tab) saves the current pattern as MIDI into **My MIDI** or any **Factory** or **Phrases** folder (Arps, Bass, MonoLines ...). It then appears in that folder. Patterns saved into Factory and Phrases folders are kept in `Documents\MelodyMagic\User Patterns`. A saved pattern remembers its Key and Scale, so loading it never guesses the key.
+* **Save...** (any tab) saves the current pattern as MIDI into **My MIDI** or any **Factory** or **Phrases** folder (Arps, Bass, MonoLines ...). It then appears in that folder. Patterns saved into Factory and Phrases folders are kept in `Documents\MelodyMagic\User Patterns`. A saved pattern remembers the key it was written in, so loading it into another key moves it correctly.
 * Phrases folders show their short name (Bass, MonoLines ...). Dropping a `.mid` on the pattern imports it into My MIDI too.
 
 **Groove.** Pick a preset from the Groove dropdown (they come from `nora_qas_library.json` in the library folder). **Q Start** and **Q End** pull note starts and ends onto it; **Link** uses one strength for both.
@@ -103,6 +106,8 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
 Click the Library to browse with the arrow keys again. Buttons and knobs never take the keyboard away from the notes.
 
 **Drag MIDI.** Drag the blue grip onto a DAW track. It renders exactly what you hear, over the last chord you played (or the key's root if you haven't played yet). The clip is at least 4 bars long. Right-click the grip to save the `.mid` file instead.
+
+**Tips** in the top bar turns the tooltips on and off.
 
 **Knobs** move in whole steps of 1, by drag or mouse wheel; double-click resets a knob. The window resizes from 60 % to 200 % from the corner.
 

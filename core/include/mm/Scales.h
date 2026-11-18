@@ -56,4 +56,12 @@ namespace mm
         int stepsAbove (int root, int steps) const noexcept;
     };
 
+    /**
+        Moves a note from one key / scale to another, keeping the melody's shape (as ArpSampler does):
+        the key moves by the shortest step (-5..+6 semitones), and a note on scale degree n of the
+        old scale lands on degree n of the new one (spread proportionally when the scales have a
+        different number of notes). Notes outside the old scale just move with the key. 0..127.
+    */
+    int transposeBetweenKeys (int note, const ScaleContext& from, int fromKey, const ScaleContext& to, int toKey) noexcept;
+
 }

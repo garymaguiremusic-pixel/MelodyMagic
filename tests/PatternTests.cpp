@@ -335,3 +335,13 @@ TEST_CASE ("Library phrase rows become chord notes of the key", "[import]")
     CHECK (p.notes[2].offset == 7);    // E
     CHECK (p.notes[3].offset == 15);   // C an octave up
 }
+
+TEST_CASE ("Gate shortens the notes that play", "[arp][gate]")
+{
+    const auto p = steps ({ 0, 2 }, 96, 80);
+    const auto half = renderPattern (makePlayPattern (p, nullptr, 0, 0, false, 0.5), { 60 }, 127, settings (ArpOrder::Melody), 120.0, 384, nullptr);
+    REQUIRE (half.size() == 2);
+    CHECK (half[0].end - half[0].start == 40.0);
+    const auto full = renderPattern (makePlayPattern (p, nullptr, 0, 0, false, 1.0), { 60 }, 127, settings (ArpOrder::Melody), 120.0, 384, nullptr);
+    CHECK (full[0].end - full[0].start == 80.0);
+}

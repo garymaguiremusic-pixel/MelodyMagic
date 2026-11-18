@@ -89,3 +89,23 @@ TEST_CASE ("Scale Lock quantise: nearest, ties go down", "[scales][scalelock]")
     CHECK (wt.quantise (61) == 60);
     CHECK (wt.quantise (127) == 126);
 }
+
+TEST_CASE ("Moving a melody between keys keeps its shape", "[scales][import]")
+{
+    const auto gm = ScaleContext::make (NaturalMinor, 7), am = ScaleContext::make (NaturalMinor, 9);
+    // G minor line G Bb D C -> A minor: A C E D (up a tone, same degrees)
+    CHECK (transposeBetweenKeys (67, gm, 7, am, 9) == 69);
+    CHECK (transposeBetweenKeys (70, gm, 7, am, 9) == 72);
+    CHECK (transposeBetweenKeys (74, gm, 7, am, 9) == 76);
+    CHECK (transposeBetweenKeys (72, gm, 7, am, 9) == 74);
+    // F minor -> C minor: the shortest move is down a fourth (-5), not up a fifth
+    const auto fm = ScaleContext::make (NaturalMinor, 5), cm = ScaleContext::make (NaturalMinor, 0);
+    CHECK (transposeBetweenKeys (65, fm, 5, cm, 0) == 60);
+    // A minor -> C major: degree for degree (the minor third becomes the major third)
+    const auto cmaj = ScaleContext::make (Major, 0);
+    CHECK (transposeBetweenKeys (69, am, 9, cmaj, 0) == 72);   // A (1) -> C (1), up a third
+    CHECK (transposeBetweenKeys (72, am, 9, cmaj, 0) == 76);   // C (3) -> E (3)
+    for (int n = 50; n < 80; ++n)
+        if (am.inScale (n))
+            CHECK (cmaj.inScale (transposeBetweenKeys (n, am, 9, cmaj, 0)));
+}

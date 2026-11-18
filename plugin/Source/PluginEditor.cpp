@@ -63,6 +63,17 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     for (auto* b : { &undoButton, &redoButton })
         addAndMakeVisible (b);
     attachToggle (bypassButton, mmp::ParamIDs::bypassed, "Bypass: MIDI passes through untouched");
+    tipsButton.setClickingTogglesState (true);
+    tipsButton.setToggleState (processor.showTooltips, dontSendNotification);
+    tipsButton.setTooltip ("Tooltips on / off");
+    tipsButton.onClick = [this]
+    {
+        processor.setShowTooltips (tipsButton.getToggleState());
+        tooltipWindow.reset (processor.showTooltips ? new TooltipWindow (this, 600) : nullptr);
+    };
+    addAndMakeVisible (tipsButton);
+    if (processor.showTooltips)
+        tooltipWindow = std::make_unique<TooltipWindow> (this, 600);
 
     dragHandle.createFile = [this] { return processor.renderMidiFile(); };
     addAndMakeVisible (dragHandle);
@@ -149,7 +160,8 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     attachKnob (rangeKnob, mmp::ParamIDs::genRange, [] (double v) { return String (roundToInt (v)) + " st"; },
                 "How far the melody spreads, in semitones");
     attachKnob (gateKnob, mmp::ParamIDs::genGate, [] (double v) { return String (roundToInt (v)) + " %"; },
-                "Note length (100 % = legato)");
+                "Gate: shortens every note as it plays (100 % = as drawn). The pattern keeps its notes;\n"
+                "the faint part of each note in the display is what the Gate cuts off.");
     newMelodyButton.setTooltip ("New notes. The pattern (rhythm) stays exactly as it is.\n"
                                 "Notes on the beat are chord tones of CHORDS, always in the Key + Scale.");
     newPatternButton.setTooltip ("A new pattern (rhythm). The notes stay, in the same order.");
@@ -390,6 +402,7 @@ void MelodyMagicPanel::resized()
     undoButton.setBounds (330, 9, 64, 26);
     redoButton.setBounds (400, 9, 64, 26);
     bypassButton.setBounds (480, 9, 76, 26);
+    tipsButton.setBounds (570, 9, 60, 26);
     dragHandle.setBounds (790, 7, 194, 30);
 
     // pattern

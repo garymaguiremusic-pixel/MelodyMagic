@@ -107,6 +107,11 @@ public:
     juce::String libraryFolderShown;
     void setLibraryView (int tab, const juce::String& folder);
 
+    /** Tooltips on / off (remembered for every instance). */
+    bool showTooltips = true;
+    void setShowTooltips (bool);
+    int gatePercent() const     { return param (mmp::ParamIDs::genGate); }
+
     // Groove
     void setGroove (std::optional<mm::Groove>, const juce::String& name);
     const std::optional<mm::Groove>& getGroove() const noexcept     { return groove; }
@@ -158,7 +163,7 @@ private:
     mm::Pattern filePattern;      // the imported MIDI file, as loaded
     juce::String fileName;
     std::atomic<std::uint16_t> customMask { 0x0fff };
-    int lastQStart = -1, lastQEnd = -1, lastQLink = -1;
+    int lastQStart = -1, lastQEnd = -1, lastQLink = -1, lastGate = -1;
 
     // handed to the audio thread with std::atomic_load / atomic_store; old copies are freed here
     std::shared_ptr<const mm::PlayPattern> livePattern;
