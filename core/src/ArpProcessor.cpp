@@ -24,8 +24,8 @@ namespace mm
             pn.start = n.start;
             pn.end = n.end;
             quantizeNote (pn.start, pn.end, pp.clip.length, groove, startStrength, endStrength, link);
-            if (gate < 1.0)
-                pn.end = pn.start + std::max (1.0, (pn.end - pn.start) * std::max (0.01, gate));
+            if (gate != 1.0)   // shorter below 1, longer (up to the pattern end) above 1
+                pn.end = std::min (pp.clip.length, pn.start + std::max (1.0, (pn.end - pn.start) * std::max (0.01, gate)));
             if (pn.start >= pp.clip.length || pn.end <= pn.start)
                 continue;
             pp.clip.notes.push_back (pn);

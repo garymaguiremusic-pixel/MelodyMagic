@@ -39,7 +39,8 @@ namespace mm
         std::vector<int> offset, step;
     };
 
-    /** gate: note length as a share of the drawn length (1 = as drawn), applied after the groove. */
+    /** gate: note length as a share of the drawn length (1 = as drawn, 0.5 = half, 2 = double, up to
+        the pattern end), applied after the groove. */
     PlayPattern makePlayPattern (const Pattern&, const Groove* groove, double startStrength, double endStrength, bool link,
                                  double gate = 1.0);
 

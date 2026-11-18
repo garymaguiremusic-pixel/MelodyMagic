@@ -345,3 +345,11 @@ TEST_CASE ("Gate shortens the notes that play", "[arp][gate]")
     const auto full = renderPattern (makePlayPattern (p, nullptr, 0, 0, false, 1.0), { 60 }, 127, settings (ArpOrder::Melody), 120.0, 384, nullptr);
     CHECK (full[0].end - full[0].start == 80.0);
 }
+
+TEST_CASE ("Gate above 100 % makes the notes longer", "[arp][gate]")
+{
+    const auto p = steps ({ 0, 2 }, 96, 40);
+    const auto twice = renderPattern (makePlayPattern (p, nullptr, 0, 0, false, 2.0), { 60 }, 127, settings (ArpOrder::Melody), 120.0, 384, nullptr);
+    REQUIRE (twice.size() == 2);
+    CHECK (twice[0].end - twice[0].start == 80.0);
+}

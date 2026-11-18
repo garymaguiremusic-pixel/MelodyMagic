@@ -208,7 +208,7 @@ void PatternGrid::resized()
 
 void PatternGrid::paint (Graphics& g)
 {
-    const double gate = jlimit (0.1, 1.0, proc.gatePercent() / 100.0);
+    const double gate = jlimit (0.1, 2.0, proc.gatePercent() / 100.0);
     const auto& pt = proc.getPattern();
     const auto scale = proc.currentScale();
     const int key = proc.currentKey();
@@ -270,8 +270,10 @@ void PatternGrid::paint (Graphics& g)
         const float v = (float) n.velocity / 127.0f;
         const auto c1 = VirusColours::blue.withMultipliedBrightness (0.55f + 0.45f * v);
         const auto c2 = VirusColours::blueGlow.withMultipliedBrightness (0.45f + 0.4f * v);
-        // Gate: the part that plays is solid, the rest of the drawn length is faint
-        const auto played = r.withWidth (jmax (3.0f, r.getWidth() * (float) gate));
+        // Gate: each note is drawn at the length it plays (shorter: the cut-off part is faint;
+        // longer: it reaches further to the right)
+        const float playedEnd = jmin (gridArea.getRight(), xForTick (jmin ((double) length, n.start + (n.end - n.start) * gate)));
+        const auto played = r.withWidth (jmax (3.0f, playedEnd - r.getX()));
         if (gate < 0.999)
         {
             g.setColour (c1.withAlpha (0.22f));
@@ -280,7 +282,7 @@ void PatternGrid::paint (Graphics& g)
         g.setGradientFill (ColourGradient (isSel ? c1.brighter (0.35f) : c1, 0.0f, r.getY(), isSel ? c2.brighter (0.35f) : c2, 0.0f, r.getBottom(), false));
         g.fillRoundedRectangle (played, 2.0f);
         g.setColour (isSel ? Colours::white : Colours::black.withAlpha (0.7f));
-        g.drawRoundedRectangle (r, 2.0f, isSel ? 1.4f : 1.0f);
+        g.drawRoundedRectangle (gate > 1.0 ? played : r, 2.0f, isSel ? 1.4f : 1.0f);
 
         const float x = xForTick (n.start);
         const float h = (velArea.getHeight() - 4.0f) * v;

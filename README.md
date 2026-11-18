@@ -15,7 +15,7 @@ It shares its look with **Virus Delay** and **ArpSampler**: the same palette, kn
 
 Every push to `main` builds the plugin on GitHub Actions and runs the unit tests and pluginval (strictness 10). It then commits a zipped build to the **`builds-windows`** branch.
 
-1. Download `MelodyMagic-VST3-Windows-x64.zip` from that branch, or from the run's artifacts.
+1. Download `MelodyMagic-VST3-Windows-x64-build-<number>.zip` from that branch, or from the run's artifacts.
 2. Unzip `MelodyMagic.vst3` into `C:\Program Files\Common Files\VST3\`.
 3. Rescan plugins in your DAW.
 
@@ -76,7 +76,7 @@ While the DAW plays, the pattern follows the song position. While it is stopped,
   * a one-bar hook repeats over each chord, moved to fit it, and an answer bar ends the phrase (4 bars = A A A B, 8 bars = A A A B A A A C);
   * rhythms come from classic trance lead rhythms (offbeat, 3-3-2, rolling, gallop and others).
   * **Density** sets how busy the rhythm is, and **Range** how far the melody spreads.
-* **Gate** shortens every note as it plays, live and in Drag MIDI (100 % = as drawn). The pattern keeps its notes; the faint end of each note in the display is the part the Gate cuts off.
+* **Gate** sets every note's length as it plays, live and in Drag MIDI: 10-200 % (100 % = as drawn, below = shorter, above = longer). The display shows the length you hear; the pattern itself keeps its notes.
 * **New Melody** writes new notes. The pattern (rhythm) stays exactly as it is, and the melody stays in the pattern's register, from its lowest note up.
 * **Top Notes Only** makes New Melody keep the bottom notes (the pattern's lowest note and the lower notes of chords) and change only the notes above them. On a pattern that is all one note, the notes on the beat stay as a pedal and the ones in between become the melody.
 * **New Pattern** writes a new rhythm. The notes stay, in the same order.
@@ -107,7 +107,7 @@ Click the Library to browse with the arrow keys again. Buttons and knobs never t
 
 **Drag MIDI.** Drag the blue grip onto a DAW track. It renders exactly what you hear, over the last chord you played (or the key's root if you haven't played yet). The clip is at least 4 bars long. Right-click the grip to save the `.mid` file instead.
 
-**Tips** in the top bar turns the tooltips on and off.
+**Tips** (bottom right, next to **?**) turns the tooltips on and off. The bottom bar also shows the build number, so you can check which build your DAW has loaded.
 
 **Knobs** move in whole steps of 1, by drag or mouse wheel; double-click resets a knob. The window resizes from 60 % to 200 % from the corner.
 

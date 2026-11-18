@@ -65,7 +65,7 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     attachToggle (bypassButton, mmp::ParamIDs::bypassed, "Bypass: MIDI passes through untouched");
     tipsButton.setClickingTogglesState (true);
     tipsButton.setToggleState (processor.showTooltips, dontSendNotification);
-    tipsButton.setTooltip ("Tooltips on / off");
+    tipsButton.setTooltip ("Tooltips on / off (bottom right, next to ?)");
     tipsButton.onClick = [this]
     {
         processor.setShowTooltips (tipsButton.getToggleState());
@@ -160,8 +160,8 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
     attachKnob (rangeKnob, mmp::ParamIDs::genRange, [] (double v) { return String (roundToInt (v)) + " st"; },
                 "How far the melody spreads, in semitones");
     attachKnob (gateKnob, mmp::ParamIDs::genGate, [] (double v) { return String (roundToInt (v)) + " %"; },
-                "Gate: shortens every note as it plays (100 % = as drawn). The pattern keeps its notes;\n"
-                "the faint part of each note in the display is what the Gate cuts off.");
+                "Gate: every note's length as it plays: below 100 % shorter, above 100 % longer (up to 200 %).\n"
+                "The display shows the length you hear; the pattern itself keeps its notes.");
     newMelodyButton.setTooltip ("New notes. The pattern (rhythm) stays exactly as it is.\n"
                                 "Notes on the beat are chord tones of CHORDS, always in the Key + Scale.");
     newPatternButton.setTooltip ("A new pattern (rhythm). The notes stay, in the same order.");
@@ -402,7 +402,7 @@ void MelodyMagicPanel::resized()
     undoButton.setBounds (330, 9, 64, 26);
     redoButton.setBounds (400, 9, 64, 26);
     bypassButton.setBounds (480, 9, 76, 26);
-    tipsButton.setBounds (570, 9, 60, 26);
+    tipsButton.setBounds (kWidth - 104, kBottomBarY + 6, 62, 22);
     dragHandle.setBounds (790, 7, 194, 30);
 
     // pattern
@@ -527,6 +527,12 @@ void MelodyMagicPanel::paint (Graphics& g)
     g.setFont (CustomLookAndFeel::uiFont (13.0f, true));
     g.setColour (Colour (0xffe3e6e8));
     g.drawText ("MELODYMAGIC", titleBox, Justification::centred);
+   #ifndef MELODYMAGIC_BUILD_ID
+    #define MELODYMAGIC_BUILD_ID "dev"
+   #endif
+    g.setFont (CustomLookAndFeel::uiFont (10.5f));
+    g.setColour (VirusColours::labelText.withAlpha (0.8f));
+    g.drawText ("build " MELODYMAGIC_BUILD_ID, titleBox.reduced (10.0f, 0.0f), Justification::centredRight);
 }
 
 //==============================================================================

@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           mkdir out
-          (cd build/MelodyMagic_artefacts/Release/VST3 && 7z a -tzip "$GITHUB_WORKSPACE/out/MelodyMagic-VST3-Windows-x64.zip" "MelodyMagic.vst3" '-xr!*.pdb' > /dev/null)
+          (cd build/MelodyMagic_artefacts/Release/VST3 && 7z a -tzip "$GITHUB_WORKSPACE/out/MelodyMagic-VST3-Windows-x64-build-${GITHUB_SHA::7}.zip" "MelodyMagic.vst3" '-xr!*.pdb' > /dev/null)
           # debug symbols for reading crash dumps (kept out of the plugin zip)
           find build -iname "MelodyMagic*.pdb" -not -path "*/CMakeFiles/*" -exec 7z a -tzip "$GITHUB_WORKSPACE/out/MelodyMagic-VST3-Windows-x64-symbols.zip" {} + > /dev/null || true
           echo "${GITHUB_SHA}" > out/COMMIT.txt

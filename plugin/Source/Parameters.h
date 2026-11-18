@@ -105,7 +105,7 @@ namespace mmp
         toggle  (ParamIDs::scaleLock,     "Scale Lock", false);
         integer (ParamIDs::genDensity,    "Melody Density", 0, 100, 60, " %");
         integer (ParamIDs::genRange,      "Melody Range", 5, 24, 14, " st");
-        integer (ParamIDs::genGate,       "Gate", 10, 100, 100, " %");
+        integer (ParamIDs::genGate,       "Gate", 10, 200, 100, " %");
         choice  (ParamIDs::genProgression, "Melody Chords", getProgressionNames(), 0);
         toggle  (ParamIDs::genTopOnly,    "Melody Top Notes Only", false);
         toggle  (ParamIDs::autoPlay,      "Auto Play", false);

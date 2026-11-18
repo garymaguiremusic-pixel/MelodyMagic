@@ -19,6 +19,13 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
+# Build number shown in the plugin's bottom bar (the git commit), so it's clear which build is loaded
+execute_process(COMMAND git rev-parse --short=7 HEAD WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE MELODYMAGIC_BUILD_ID OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT MELODYMAGIC_BUILD_ID)
+    set(MELODYMAGIC_BUILD_ID "dev")
+endif()
+
 # ------------------------------------------------------------------------------
 # Core: all musical logic, no JUCE (shared by the plugin and the tests)
 add_library(mmcore STATIC
@@ -118,7 +125,8 @@ if(MELODYMAGIC_BUILD_PLUGIN)
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
-        JUCE_DISPLAY_SPLASH_SCREEN=0)
+        JUCE_DISPLAY_SPLASH_SCREEN=0
+        MELODYMAGIC_BUILD_ID="${MELODYMAGIC_BUILD_ID}")
 
     target_sources(MelodyMagic PRIVATE ${MELODYMAGIC_PLUGIN_SOURCES})
     target_include_directories(MelodyMagic PRIVATE plugin/Source)

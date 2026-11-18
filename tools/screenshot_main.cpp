@@ -228,6 +228,13 @@ int main (int argc, char** argv)
                 }
     }
 
+    if (const char* gate = std::getenv ("MM_GATE"))
+    {
+        if (auto* gp = proc->apvts.getParameter (mmp::ParamIDs::genGate))
+            gp->setValueNotifyingHost (gp->convertTo0to1 ((float) String (gate).getIntValue()));
+        MessageManager::getInstance()->runDispatchLoopUntil (300);
+    }
+
     const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 2.0f);
     out.deleteFile();
     FileOutputStream stream (out);
