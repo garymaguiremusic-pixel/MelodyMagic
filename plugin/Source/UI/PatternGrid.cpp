@@ -6,7 +6,9 @@ using namespace juce;
 PatternGrid::PatternGrid (MelodyMagicProcessor& p) : proc (p)
 {
     setTooltip ("Click: add a note (locked to the Key + Scale).  Drag: move.  Drag the right edge: length.  Alt: no snap, any semitone.\n"
-                "Mouse wheel over a note: up / down to the next scale note (Alt: a semitone).\n"
+                "Mouse wheel over a note: up / down to the next scale note (Alt: a semitone, Ctrl: an octave).\n"
+                "Ctrl+A or Select All: select every note. Shift+drag: box select, Shift+click: add / remove a note.\n"
+                "Up / Down, the wheel or the arrow buttons move the whole selection; drag one to drag them all.\n"
                 "Right-click or double-click: delete.  Drop a .mid file here to import it.\n"
                 "Keys: Up / Down move the selected note, Left / Right select, Delete removes it.");
     setWantsKeyboardFocus (true);
@@ -36,9 +38,87 @@ void PatternGrid::modelChanged()
         computeRange();
     else
         length = proc.getPattern().lengthTicks();
-    if (selected >= (int) proc.getPattern().notes.size())
+    const int count = (int) proc.getPattern().notes.size();
+    if (selected >= count)
         selected = -1;
+    if ((int) sel.size() != count)   // a different pattern: start with nothing selected
+        sel.assign ((size_t) count, false);
     repaint();
+}
+
+int PatternGrid::numSelected() const noexcept
+{
+    int n = 0;
+    for (bool b : sel) n += b ? 1 : 0;
+    return n;
+}
+
+void PatternGrid::clearSelection()
+{
+    selected = -1;
+    sel.assign (proc.getPattern().notes.size(), false);
+    repaint();
+    if (onSelectionChanged) onSelectionChanged();
+}
+
+void PatternGrid::selectAll()
+{
+    sel.assign (proc.getPattern().notes.size(), true);
+    selected = sel.empty() ? -1 : 0;
+    grabKeyboardFocus();
+    repaint();
+    if (onSelectionChanged) onSelectionChanged();
+}
+
+void PatternGrid::selectOnly (int i)
+{
+    sel.assign (proc.getPattern().notes.size(), false);
+    if (i >= 0 && i < (int) sel.size())
+        sel[(size_t) i] = true;
+    selected = i;
+}
+
+void PatternGrid::commitWithSelection (std::vector<mm::PatternNote> notes, std::vector<bool> noteFlags, int primary)
+{
+    // sort the way mm::Pattern::sort does, carrying each note's flags along
+    std::vector<size_t> order (notes.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort (order.begin(), order.end(), [&notes] (size_t a, size_t b)
+    {
+        return notes[a].start != notes[b].start ? notes[a].start < notes[b].start : notes[a].offset < notes[b].offset;
+    });
+    auto p = proc.getPattern();
+    p.notes.clear();
+    sel.clear();
+    selected = -1;
+    for (size_t k = 0; k < order.size(); ++k)
+    {
+        p.notes.push_back (notes[order[k]]);
+        sel.push_back (order[k] < noteFlags.size() && noteFlags[order[k]]);
+        if ((int) order[k] == primary)
+            selected = (int) k;
+    }
+    proc.updatePattern (p);
+    repaint();
+}
+
+void PatternGrid::deleteSelection()
+{
+    auto p = proc.getPattern();
+    if (numSelected() == 0 && selected >= 0)
+        selectOnly (selected);
+    if (numSelected() == 0)
+        return;
+    proc.beginEdit();
+    std::vector<mm::PatternNote> keep;
+    for (size_t i = 0; i < p.notes.size(); ++i)
+        if (! isSelected ((int) i))
+            keep.push_back (p.notes[i]);
+    p.notes = keep;
+    selected = -1;
+    sel.assign (keep.size(), false);
+    commit (p);
+    if (onSelectionChanged) onSelectionChanged();
 }
 
 float PatternGrid::rowHeight() const noexcept      { return gridArea.getHeight() / (float) jmax (1, numRows()); }
@@ -164,18 +244,18 @@ void PatternGrid::paint (Graphics& g)
     {
         const auto& n = pt.notes[(size_t) i];
         const auto r = noteRect (n);
-        const bool sel = i == selected;
+        const bool isSel = isSelected (i) || i == selected;
         const float v = (float) n.velocity / 127.0f;
         const auto c1 = VirusColours::blue.withMultipliedBrightness (0.55f + 0.45f * v);
         const auto c2 = VirusColours::blueGlow.withMultipliedBrightness (0.45f + 0.4f * v);
-        g.setGradientFill (ColourGradient (sel ? c1.brighter (0.35f) : c1, 0.0f, r.getY(), sel ? c2.brighter (0.35f) : c2, 0.0f, r.getBottom(), false));
+        g.setGradientFill (ColourGradient (isSel ? c1.brighter (0.35f) : c1, 0.0f, r.getY(), isSel ? c2.brighter (0.35f) : c2, 0.0f, r.getBottom(), false));
         g.fillRoundedRectangle (r, 2.0f);
-        g.setColour (sel ? Colours::white : Colours::black.withAlpha (0.7f));
-        g.drawRoundedRectangle (r, 2.0f, sel ? 1.4f : 1.0f);
+        g.setColour (isSel ? Colours::white : Colours::black.withAlpha (0.7f));
+        g.drawRoundedRectangle (r, 2.0f, isSel ? 1.4f : 1.0f);
 
         const float x = xForTick (n.start);
         const float h = (velArea.getHeight() - 4.0f) * v;
-        g.setColour (sel ? Colours::white : VirusColours::blue);
+        g.setColour (isSel ? Colours::white : VirusColours::blue);
         g.fillRect (Rectangle<float> (x + 1.0f, velArea.getBottom() - 2.0f - h, 3.0f, h));
     }
 
@@ -194,6 +274,14 @@ void PatternGrid::paint (Graphics& g)
         g.setColour (VirusColours::labelText.withAlpha (0.7f));
         g.drawText ("Click to add notes, press New Pattern, pick one in the Library, or drop a MIDI file here",
                     gridArea, Justification::centred);
+    }
+    if (drag == Drag::Marquee)
+    {
+        const auto r = Rectangle<float> (marqueeStart, marqueeEnd);
+        g.setColour (VirusColours::blue.withAlpha (0.18f));
+        g.fillRect (r);
+        g.setColour (VirusColours::blue);
+        g.drawRect (r, 1.0f);
     }
     if (hasKeyboardFocus (false))
     {
@@ -264,6 +352,8 @@ void PatternGrid::mouseDown (const MouseEvent& e)
     editStarted = false;
     drag = Drag::None;
     auto p = proc.getPattern();
+    if (sel.size() != p.notes.size())
+        sel.assign (p.notes.size(), false);
 
     if (velArea.contains (e.position))
     {
@@ -285,22 +375,44 @@ void PatternGrid::mouseDown (const MouseEvent& e)
     {
         if (i >= 0)
         {
-            ensureEditStarted();
-            p.notes.erase (p.notes.begin() + i);
-            selected = -1;
-            commit (p);
-            if (onSelectionChanged) onSelectionChanged();
+            if (! isSelected (i))
+                selectOnly (i);
+            deleteSelection();
         }
+        return;
+    }
+
+    if (e.mods.isShiftDown())
+    {
+        if (i >= 0)
+        {
+            // Shift+click: add a note to the selection or take it out
+            sel[(size_t) i] = ! sel[(size_t) i];
+            selected = sel[(size_t) i] ? i : -1;
+        }
+        else
+        {
+            // Shift+drag on empty space: select the notes inside a box
+            drag = Drag::Marquee;
+            marqueeStart = marqueeEnd = e.position;
+            marqueeBase = sel;
+        }
+        if (onSelectionChanged) onSelectionChanged();
+        repaint();
         return;
     }
 
     if (i >= 0)
     {
+        if (! isSelected (i))
+            selectOnly (i);
         selected = i;
         dragOriginal = p.notes[(size_t) i];
         dragStartTick = tickForX (e.position.x);
         dragStartOffset = offsetForY (e.position.y);
         drag = std::abs (e.position.x - noteRect (dragOriginal).getRight()) < 5.0f ? Drag::Resize : Drag::Move;
+        groupOriginal = p.notes;
+        groupFlags = sel;
     }
     else
     {
@@ -313,10 +425,11 @@ void PatternGrid::mouseDown (const MouseEvent& e)
         n.velocity = selected >= 0 && selected < (int) p.notes.size() ? p.notes[(size_t) selected].velocity : 100;
         p.notes.push_back (n);
         selected = selectAfterSort (p, n);
+        commit (p);
+        selectOnly (selected);
         dragOriginal = n;
         dragStartTick = t;
         drag = Drag::Resize;
-        commit (p);
     }
     if (onSelectionChanged) onSelectionChanged();
     repaint();
@@ -331,33 +444,72 @@ void PatternGrid::mouseDrag (const MouseEvent& e)
             setVelocityFromY (i, e.position.y);
         return;
     }
-    if (selected < 0 || (drag != Drag::Move && drag != Drag::Resize))
-        return;
 
-    auto p = proc.getPattern();
-    if (selected >= (int) p.notes.size())
+    if (drag == Drag::Marquee)
+    {
+        marqueeEnd = e.position;
+        const auto box = Rectangle<float> (marqueeStart, marqueeEnd);
+        const auto& notes = proc.getPattern().notes;
+        sel = marqueeBase;
+        sel.resize (notes.size(), false);
+        for (size_t k = 0; k < notes.size(); ++k)
+            if (noteRect (notes[k]).intersects (box))
+                sel[k] = true;
+        selected = -1;
+        for (size_t k = 0; k < sel.size(); ++k)
+            if (sel[k]) { selected = (int) k; break; }
+        repaint();
+        if (onSelectionChanged) onSelectionChanged();
         return;
-    auto n = dragOriginal;
+    }
+
     const bool fine = e.mods.isAltDown();
     const double t = tickForX (e.position.x);
 
-    if (drag == Drag::Move)
+    if (drag == Drag::Move && ! groupOriginal.empty())
     {
-        double delta = t - dragStartTick;
-        delta = fine ? std::round (delta) : std::round (delta / snap) * snap;
-        const int len = dragOriginal.end - dragOriginal.start;
-        n.start = jlimit (0, jmax (0, length - len), dragOriginal.start + (int) delta);
-        n.end = n.start + len;
-        n.offset = jlimit (-mm::kMaxOffset, mm::kMaxOffset, dragOriginal.offset + offsetForY (e.position.y) - dragStartOffset);
-        if (! fine)
-            n.offset = snapToKey (n.offset);
-    }
-    else
-    {
-        const int end = fine ? (int) std::round (t) : (int) std::ceil (t / snap - 1.0e-6) * snap;
-        n.end = jlimit (n.start + 1, length, end);
+        // every selected note moves together: time on the grid, pitch locked to the key
+        int dt = (int) (fine ? std::round (t - dragStartTick) : std::round ((t - dragStartTick) / snap) * snap);
+        int minStart = length, maxEnd = 0;
+        for (size_t k = 0; k < groupOriginal.size(); ++k)
+            if (k < groupFlags.size() && groupFlags[k])
+            {
+                minStart = jmin (minStart, groupOriginal[k].start);
+                maxEnd = jmax (maxEnd, groupOriginal[k].end);
+            }
+        dt = jlimit (-minStart, length - maxEnd, dt);
+        const int dRows = offsetForY (e.position.y) - dragStartOffset;
+
+        auto notes = groupOriginal;
+        for (size_t k = 0; k < notes.size(); ++k)
+            if (k < groupFlags.size() && groupFlags[k])
+            {
+                notes[k].start += dt;
+                notes[k].end += dt;
+                if (dRows != 0)
+                {
+                    const int o = jlimit (-mm::kMaxOffset, mm::kMaxOffset, groupOriginal[k].offset + dRows);
+                    notes[k].offset = fine ? o : snapToKey (o);
+                }
+            }
+        if (notes == proc.getPattern().notes)
+            return;
+        ensureEditStarted();
+        int primary = -1;
+        for (size_t k = 0; k < groupOriginal.size(); ++k)
+            if (groupOriginal[k] == dragOriginal) { primary = (int) k; break; }
+        commitWithSelection (notes, groupFlags, primary);
+        return;
     }
 
+    if (drag != Drag::Resize || selected < 0)
+        return;
+    auto p = proc.getPattern();
+    if (selected >= (int) p.notes.size())
+        return;
+    auto n = p.notes[(size_t) selected];
+    const int end = fine ? (int) std::round (t) : (int) std::ceil (t / snap - 1.0e-6) * snap;
+    n.end = jlimit (n.start + 1, length, end);
     if (n == p.notes[(size_t) selected])
         return;
     ensureEditStarted();
@@ -367,18 +519,9 @@ void PatternGrid::mouseDrag (const MouseEvent& e)
 
 void PatternGrid::mouseUp (const MouseEvent&)
 {
-    if ((drag == Drag::Move || drag == Drag::Resize) && editStarted)
-    {
-        auto p = proc.getPattern();
-        if (selected >= 0 && selected < (int) p.notes.size())
-        {
-            const auto n = p.notes[(size_t) selected];
-            selected = selectAfterSort (p, n);
-            commit (p);
-        }
-    }
     drag = Drag::None;
     editStarted = false;
+    groupOriginal.clear();
     computeRange();
     repaint();
 }
@@ -386,14 +529,10 @@ void PatternGrid::mouseUp (const MouseEvent&)
 void PatternGrid::mouseDoubleClick (const MouseEvent& e)
 {
     const int i = noteAt (e.position);
-    if (i < 0 || e.mods.isPopupMenu())
+    if (i < 0 || e.mods.isPopupMenu() || e.mods.isShiftDown())
         return;
-    auto p = proc.getPattern();
-    proc.beginEdit();
-    p.notes.erase (p.notes.begin() + i);
-    selected = -1;
-    commit (p);
-    if (onSelectionChanged) onSelectionChanged();
+    selectOnly (i);
+    deleteSelection();
 }
 
 void PatternGrid::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& wheel)
@@ -404,24 +543,46 @@ void PatternGrid::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& 
     const float dir = (wheel.isReversed ? -1.0f : 1.0f) * (std::abs (wheel.deltaY) > 0.0f ? wheel.deltaY : wheel.deltaX);
     if (std::abs (dir) < 1.0e-6f)
         return;
-    selected = i;
-    moveSelected (dir > 0.0f ? 1 : -1, e.mods.isAltDown());
+    if (! isSelected (i))   // over a selected note the whole selection moves
+        selectOnly (i);
+    moveSelection (dir > 0.0f ? 1 : -1, e.mods.isAltDown(), e.mods.isCommandDown());
 }
 
-void PatternGrid::moveSelected (int direction, bool chromatic)
+void PatternGrid::moveSelection (int direction, bool chromatic, bool octave)
 {
     auto p = proc.getPattern();
-    if (selected < 0 || selected >= (int) p.notes.size())
+    if (p.notes.empty())
         return;
+    if (sel.size() != p.notes.size())
+        sel.assign (p.notes.size(), false);
+    auto chosen = sel;
+    if (numSelected() == 0)
+    {
+        if (selected >= 0 && selected < (int) chosen.size())
+            chosen[(size_t) selected] = true;
+        else
+            chosen.assign (chosen.size(), true);   // nothing selected: move everything
+    }
+
     const auto scale = proc.currentScale();
-    auto n = p.notes[(size_t) selected];
-    n.offset = mm::stepOffset (n.offset, direction, chromatic ? nullptr : &scale, proc.currentKey());
-    if (n == p.notes[(size_t) selected])
+    auto notes = p.notes;
+    bool changed = false;
+    for (size_t k = 0; k < notes.size(); ++k)
+    {
+        if (! chosen[k])
+            continue;
+        int o = notes[k].offset;
+        if (octave)
+            o = jlimit (-mm::kMaxOffset, mm::kMaxOffset, o + 12 * direction);
+        else
+            o = mm::stepOffset (o, direction, chromatic ? nullptr : &scale, proc.currentKey());
+        changed = changed || o != notes[k].offset;
+        notes[k].offset = o;
+    }
+    if (! changed)
         return;
     proc.beginEdit();
-    p.notes[(size_t) selected] = n;
-    selected = selectAfterSort (p, n);
-    commit (p);
+    commitWithSelection (notes, chosen, selected);
     computeRange();
     if (onSelectionChanged) onSelectionChanged();
 }
@@ -442,29 +603,34 @@ bool PatternGrid::keyPressed (const KeyPress& key)
         proc.redo();
         return true;
     }
+    if (cmd && code == 'A')
+    {
+        selectAll();
+        return true;
+    }
+    if (code == KeyPress::escapeKey)
+    {
+        clearSelection();
+        return true;
+    }
     if (code == KeyPress::upKey || code == KeyPress::downKey)
     {
-        moveSelected (code == KeyPress::upKey ? 1 : -1, key.getModifiers().isAltDown());
+        moveSelection (code == KeyPress::upKey ? 1 : -1, key.getModifiers().isAltDown(), cmd);
         return true;
     }
     if (code == KeyPress::leftKey || code == KeyPress::rightKey)
     {
         if (count > 0)
         {
-            selected = selected < 0 ? 0 : jlimit (0, count - 1, selected + (code == KeyPress::rightKey ? 1 : -1));
+            selectOnly (selected < 0 ? 0 : jlimit (0, count - 1, selected + (code == KeyPress::rightKey ? 1 : -1)));
             repaint();
             if (onSelectionChanged) onSelectionChanged();
         }
         return true;
     }
-    if ((code == KeyPress::deleteKey || code == KeyPress::backspaceKey) && selected >= 0 && selected < count)
+    if (code == KeyPress::deleteKey || code == KeyPress::backspaceKey)
     {
-        auto p = proc.getPattern();
-        proc.beginEdit();
-        p.notes.erase (p.notes.begin() + selected);
-        selected = jmin (selected, (int) p.notes.size() - 1);
-        commit (p);
-        if (onSelectionChanged) onSelectionChanged();
+        deleteSelection();
         return true;
     }
     return false;

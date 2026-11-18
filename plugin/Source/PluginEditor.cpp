@@ -90,8 +90,17 @@ MelodyMagicPanel::MelodyMagicPanel (MelodyMagicProcessor& p)
         processor.setPattern (pt);
         grid.clearSelection();
     };
+    selectAllButton.setTooltip ("Select every note (Ctrl+A). Shift+drag in the pattern selects a group, Shift+click adds or removes a note, Esc clears.");
+    upButton.setTooltip ("Move the selected notes up to the next scale note (all notes when none are selected). Alt: a semitone.");
+    downButton.setTooltip ("Move the selected notes down to the next scale note (all notes when none are selected). Alt: a semitone.");
+    selectAllButton.onClick = [this] { grid.selectAll(); };
+    upButton.onClick = [this] { grid.moveSelection (1, ModifierKeys::currentModifiers.isAltDown()); grid.grabKeyboardFocus(); };
+    downButton.onClick = [this] { grid.moveSelection (-1, ModifierKeys::currentModifiers.isAltDown()); grid.grabKeyboardFocus(); };
+    for (auto* b : { &selectAllButton, &upButton, &downButton })
+        addAndMakeVisible (b);
     selectionLcd.setTooltip ("Selected note (as played from the key's root) and its velocity");
     grid.onSelectionChanged = [this] { updateSelectionInfo(); };
+    grid.setComponentID ("grid");
     grid.onFileDropped = [this] (const File& f) { importMidi (f); };
     for (auto* c : std::initializer_list<Component*> { &clearButton, &selectionLcd, &grid, &libraryPanel })
         addAndMakeVisible (c);
@@ -325,7 +334,12 @@ void MelodyMagicPanel::updateSelectionInfo()
 {
     const auto& pt = processor.getPattern();
     const int sel = grid.getSelected();
-    if (sel >= 0 && sel < (int) pt.notes.size())
+    if (grid.numSelected() > 1)
+    {
+        selectionLcd.setContent (String (grid.numSelected()) + " of " + String ((int) pt.notes.size()) + " selected", {});
+        selectionLcd.setDimmed (false);
+    }
+    else if (sel >= 0 && sel < (int) pt.notes.size())
     {
         const auto& n = pt.notes[(size_t) sel];
         const String name (mm::keyName (processor.currentKey() + n.offset));
@@ -381,7 +395,10 @@ void MelodyMagicPanel::resized()
     // pattern
     lengthBox.setBounds (66, 72, 84, 22);
     snapBox.setBounds (198, 72, 72, 22);
-    selectionLcd.setBounds (470, 72, 156, 22);
+    selectAllButton.setBounds (284, 72, 82, 22);
+    upButton.setBounds (370, 72, 46, 22);
+    downButton.setBounds (420, 72, 50, 22);
+    selectionLcd.setBounds (478, 72, 150, 22);
     clearButton.setBounds (636, 72, 48, 22);
     grid.setBounds (16, 100, 668, 298);
     libraryPanel.setBounds (libraryArea);

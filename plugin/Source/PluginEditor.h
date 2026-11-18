@@ -53,7 +53,7 @@ private:
     // Pattern
     juce::ComboBox lengthBox, snapBox;
     LcdDisplay selectionLcd;
-    juce::TextButton clearButton { "Clear" };
+    juce::TextButton clearButton { "Clear" }, selectAllButton { "Select All" }, upButton { "Up" }, downButton { "Down" };
     PatternGrid grid;
     LibraryPanel libraryPanel;
 

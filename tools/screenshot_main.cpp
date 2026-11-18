@@ -189,6 +189,31 @@ int main (int argc, char** argv)
         MessageManager::getInstance()->runDispatchLoopUntil (100);
     }
 
+    // select all and move up: every note goes up one scale step and stays in key
+    if (std::getenv ("MM_TEST_SELECT") != nullptr)
+    {
+        if (auto* panel = dynamic_cast<MelodyMagicPanel*> (editor->getChildComponent (0)))
+            if (auto* grid = panel->findChildWithID ("grid"))
+                if (auto* g = dynamic_cast<PatternGrid*> (grid))
+                {
+                    const auto before = proc->getPattern();
+                    g->selectAll();
+                    g->moveSelection (1, false);
+                    const auto after = proc->getPattern();
+                    const auto scale = proc->currentScale();
+                    int up = 0, inKey = 0;
+                    for (size_t i = 0; i < before.notes.size() && i < after.notes.size(); ++i)
+                    {
+                        up += after.notes[i].offset > before.notes[i].offset ? 1 : 0;
+                        inKey += scale.inScale (proc->currentKey() + after.notes[i].offset) ? 1 : 0;
+                    }
+                    std::printf ("select all + up: %d of %d notes moved up, %d in key, %d selected\n", up,
+                                 (int) after.notes.size(), inKey, g->numSelected());
+                    g->moveSelection (-1, false, true);
+                    std::printf ("octave down: first note %d -> %d\n", after.notes[0].offset, proc->getPattern().notes[0].offset);
+                }
+    }
+
     const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 2.0f);
     out.deleteFile();
     FileOutputStream stream (out);

@@ -38,6 +38,12 @@ MelodyMagic takes MIDI in and sends MIDI out; it makes no sound itself. It loads
 | **Mouse wheel over a note** | up / down a semitone (with Scale Lock on, to the next note of the scale) |
 | Right-click or double-click a note | delete it |
 | Drag in the lower strip | set velocities |
+| **Select All** button or Ctrl+A | select every note |
+| Shift+drag on empty space / Shift+click | select a group / add or remove a note |
+| **Up / Down** buttons, Up/Down keys or mouse wheel | move the whole selection to the next scale note (Alt = a semitone, Ctrl = an octave). With nothing selected, the buttons move every note |
+| Drag a selected note | moves the whole selection |
+| Delete / right-click | deletes the selection |
+| Esc | clears the selection |
 
 Drawing is **locked to the Key + Scale**: new or dragged notes snap to the nearest scale note, and the mouse wheel and Up/Down move to the next scale note. Hold **Alt** to place or move by a free semitone.
 
