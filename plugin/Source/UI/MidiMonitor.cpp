@@ -83,12 +83,12 @@ void MidiMonitor::paint (Graphics& g)
     g.setColour (VirusColours::labelText);
     g.drawText ("OUT", right.removeFromTop (right.getHeight() * 0.5f), Justification::centredLeft);
     g.setFont (CustomLookAndFeel::uiFont (11.5f, true));
-    g.setColour (lastText.isEmpty() ? VirusColours::labelText.withAlpha (0.5f) : VirusColours::blue);
+    g.setColour (lastText.isEmpty() ? VirusColours::labelText.withAlpha (0.5f) : VirusColours::accent);
     g.drawFittedText (lastText.isEmpty() ? String ("-") : lastText, right.toNearestInt(), Justification::centredLeft, 1, 0.7f);
 
     // scrolling roll
     auto roll = b.reduced (8.0f, 0.0f);
-    g.setColour (Colour (0xff101214));
+    g.setColour (VirusColours::insetTop);
     g.fillRoundedRectangle (roll, 2.0f);
     if (notes.empty())
         return;
@@ -106,7 +106,7 @@ void MidiMonitor::paint (Graphics& g)
         const float x0 = roll.getRight() - (float) ((now - s.on) / kWindowMs) * roll.getWidth();
         const float x1 = roll.getRight() - (float) ((s.off >= 0.0 ? now - s.off : 0.0) / kWindowMs) * roll.getWidth();
         const float y = roll.getBottom() - (float) (s.note - lo + 1) * noteH;
-        g.setColour (VirusColours::blue.withAlpha (0.35f + 0.65f * (float) s.vel / 127.0f));
+        g.setColour (VirusColours::accent.withAlpha (0.35f + 0.65f * (float) s.vel / 127.0f));
         g.fillRect (Rectangle<float> (x0, y, jmax (2.0f, x1 - x0), jmax (1.5f, noteH - 0.5f)));
     }
 }

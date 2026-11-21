@@ -458,7 +458,7 @@ void MelodyMagicPanel::paint (Graphics& g)
 
     // top bar
     auto top = Rectangle<float> (0.0f, 0.0f, (float) kWidth, (float) kTopStripH);
-    g.setGradientFill (ColourGradient (Colour (0xff4a4e53), 0.0f, 0.0f, Colour (0xff2b2e32), 0.0f, top.getBottom(), false));
+    g.setGradientFill (ColourGradient (Colour (0xff222224), 0.0f, 0.0f, Colour (0xff111112), 0.0f, top.getBottom(), false));
     g.fillRect (top);
     g.setColour (Colours::white.withAlpha (0.18f));
     g.drawHorizontalLine (0, 0.0f, (float) kWidth);
@@ -499,14 +499,14 @@ void MelodyMagicPanel::paint (Graphics& g)
     CustomLookAndFeel::drawPanel (g, generateArea, "Melody Maker");
     CustomLookAndFeel::drawSmallLabel (g, "Chords", { 708.0f, 310.0f, 54.0f, 22.0f }, Justification::centredLeft);
     g.setFont (CustomLookAndFeel::uiFont (10.0f));
-    g.setColour (processor.fileStyleActive() ? VirusColours::blue : VirusColours::labelText.withAlpha (0.75f));
+    g.setColour (processor.fileStyleActive() ? VirusColours::accent : VirusColours::labelText.withAlpha (0.75f));
     g.drawFittedText (style, Rectangle<int> (708, 491, 276, 10), Justification::centred, 1, 0.8f);
 
     CustomLookAndFeel::drawPanel (g, grooveArea, "Groove");
 
     // bottom bar
     auto bottom = Rectangle<float> (0.0f, (float) kBottomBarY, (float) kWidth, (float) (kHeight - kBottomBarY));
-    g.setGradientFill (ColourGradient (Colour (0xff2b2e32), 0.0f, bottom.getY(), Colour (0xff1c1e21), 0.0f, bottom.getBottom(), false));
+    g.setGradientFill (ColourGradient (VirusColours::popupBackground, 0.0f, bottom.getY(), VirusColours::insetTop, 0.0f, bottom.getBottom(), false));
     g.fillRect (bottom);
     g.setColour (VirusColours::bevelDark);
     g.drawHorizontalLine (kBottomBarY, 0.0f, (float) kWidth);
@@ -514,18 +514,18 @@ void MelodyMagicPanel::paint (Graphics& g)
     g.drawHorizontalLine (kBottomBarY + 1, 0.0f, (float) kWidth);
 
     auto tag = Rectangle<float> (12.0f, (float) kBottomBarY + 6.0f, 96.0f, 22.0f);
-    g.setGradientFill (ColourGradient (Colour (0xff6b7076), 0.0f, tag.getY(), Colour (0xff3c4045), 0.0f, tag.getBottom(), false));
+    g.setGradientFill (ColourGradient (VirusColours::headerTop, 0.0f, tag.getY(), VirusColours::headerBottom, 0.0f, tag.getBottom(), false));
     g.fillRoundedRectangle (tag, 3.0f);
     g.setColour (VirusColours::bevelDark);
     g.drawRoundedRectangle (tag, 3.0f, 1.0f);
     g.setFont (CustomLookAndFeel::uiFont (11.5f, true));
-    g.setColour (Colour (0xffdfe3e6));
+    g.setColour (VirusColours::headerText);
     g.drawText ("ARP", tag, Justification::centred);
 
     auto titleBox = Rectangle<float> (180.0f, (float) kBottomBarY + 6.0f, (float) kWidth - 360.0f, 22.0f);
     CustomLookAndFeel::drawInsetBox (g, titleBox, 3.0f);
     g.setFont (CustomLookAndFeel::uiFont (13.0f, true));
-    g.setColour (Colour (0xffe3e6e8));
+    g.setColour (VirusColours::lightGrey);
     g.drawText ("MELODYMAGIC", titleBox, Justification::centred);
    #ifndef MELODYMAGIC_BUILD_ID
     #define MELODYMAGIC_BUILD_ID "dev"
@@ -543,7 +543,7 @@ void MelodyMagicPanel::createBackground()
     Graphics g (background);
     g.addTransform (AffineTransform::scale (2.0f));
 
-    g.setGradientFill (ColourGradient (Colour (0xff3b3e42), 0.0f, 0.0f, Colour (0xff1e2023), 0.0f, (float) kHeight, false));
+    g.setGradientFill (ColourGradient (Colour (0xff1a1a1c), 0.0f, 0.0f, Colour (0xff070708), 0.0f, (float) kHeight, false));
     g.fillAll();
 
     // brushed metal: faint full-width lines plus random short streaks
@@ -591,7 +591,7 @@ void MelodyMagicPanel::drawWordmark (Graphics& g, Rectangle<float> area)
     second.createPath (secondPath);
     g.setColour (Colours::black.withAlpha (0.5f));
     g.fillPath (secondPath, AffineTransform::translation (1.0f, 1.0f));
-    g.setColour (VirusColours::blue);
+    g.setColour (VirusColours::accent);
     g.fillPath (secondPath);
 
     Path swoosh;
@@ -599,7 +599,7 @@ void MelodyMagicPanel::drawWordmark (Graphics& g, Rectangle<float> area)
     const float ex = secondPath.getBounds().getRight();
     swoosh.startNewSubPath (sx, sy);
     swoosh.quadraticTo ((sx + ex) * 0.5f, sy + 3.5f, ex + 6.0f, sy - 2.0f);
-    g.setGradientFill (ColourGradient (VirusColours::blue.withAlpha (0.0f), sx, sy, VirusColours::blue, ex, sy, false));
+    g.setGradientFill (ColourGradient (VirusColours::accent.withAlpha (0.0f), sx, sy, VirusColours::accent, ex, sy, false));
     g.strokePath (swoosh, PathStrokeType (1.6f, PathStrokeType::curved, PathStrokeType::rounded));
 }
 

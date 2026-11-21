@@ -223,7 +223,7 @@ void PatternGrid::paint (Graphics& g)
         const auto r = Rectangle<float> (gridArea.getX(), gridArea.getY() + rh * (float) (top - o), gridArea.getWidth(), rh);
         const bool root = mm::floorMod (o, 12) == 0;
         const bool inScale = scale.inScale (key + o);
-        g.setColour (root ? Colour (0xff1f2d3b) : (inScale ? Colour (0xff1d2024) : Colour (0xff131517)));
+        g.setColour (root ? Colour (0xff2a1a10) : (inScale ? VirusColours::panelTop : VirusColours::background));   // key root rows: dark orange
         g.fillRect (r);
         g.setColour (Colours::black.withAlpha (root ? 0.0f : 0.45f));
         g.drawHorizontalLine ((int) r.getBottom(), r.getX(), r.getRight());
@@ -234,12 +234,12 @@ void PatternGrid::paint (Graphics& g)
             if (root && o != 0)
                 label << (o > 0 ? " +" : " ") << String (o / 12);
             g.setFont (CustomLookAndFeel::uiFont (jlimit (7.0f, 10.0f, rh * 0.9f), root));
-            g.setColour (root ? VirusColours::blue : (inScale ? VirusColours::labelText : VirusColours::labelText.withAlpha (0.4f)));
+            g.setColour (root ? VirusColours::accent : (inScale ? VirusColours::labelText : VirusColours::labelText.withAlpha (0.4f)));
             g.drawText (label, Rectangle<float> (labelArea.getX(), r.getY() - 2.0f, labelArea.getWidth() - 4.0f, rh + 4.0f), Justification::centredRight);
         }
         if (root)
         {
-            g.setColour (Colour (0xff3a4a5a));
+            g.setColour (VirusColours::accentGlow.withAlpha (0.35f));
             g.drawHorizontalLine ((int) r.getBottom(), r.getX(), r.getRight());
         }
     }
@@ -249,9 +249,9 @@ void PatternGrid::paint (Graphics& g)
     {
         const float x = xForTick (t);
         const bool bar = t % mm::kTicksPerBar == 0, beat = t % mm::kPhrasePpq == 0;
-        g.setColour (bar ? Colour (0xff59636d) : (beat ? Colour (0xff353c43) : Colour (0xff24292e)));
+        g.setColour (VirusColours::lightGrey.withAlpha (bar ? 0.35f : (beat ? 0.14f : 0.06f)));
         g.drawVerticalLine ((int) x, gridArea.getY(), gridArea.getBottom());
-        g.setColour (bar ? Colour (0xff59636d).withAlpha (0.8f) : Colour (0xff2b3035));
+        g.setColour (VirusColours::lightGrey.withAlpha (bar ? 0.3f : 0.08f));
         g.drawVerticalLine ((int) x, velArea.getY(), velArea.getBottom());
         if (bar && t < length)
         {
@@ -268,8 +268,8 @@ void PatternGrid::paint (Graphics& g)
         const auto r = noteRect (n);
         const bool isSel = isSelected (i) || i == selected;
         const float v = (float) n.velocity / 127.0f;
-        const auto c1 = VirusColours::blue.withMultipliedBrightness (0.55f + 0.45f * v);
-        const auto c2 = VirusColours::blueGlow.withMultipliedBrightness (0.45f + 0.4f * v);
+        const auto c1 = VirusColours::accent.withMultipliedBrightness (0.55f + 0.45f * v);
+        const auto c2 = VirusColours::accentGlow.withMultipliedBrightness (0.45f + 0.4f * v);
         // Gate: each note is drawn at the length it plays (shorter: the cut-off part is faint;
         // longer: it reaches further to the right)
         const float playedEnd = jmin (gridArea.getRight(), xForTick (jmin ((double) length, n.start + (n.end - n.start) * gate)));
@@ -286,7 +286,7 @@ void PatternGrid::paint (Graphics& g)
 
         const float x = xForTick (n.start);
         const float h = (velArea.getHeight() - 4.0f) * v;
-        g.setColour (isSel ? Colours::white : VirusColours::blue);
+        g.setColour (isSel ? Colours::white : VirusColours::accent);
         g.fillRect (Rectangle<float> (x + 1.0f, velArea.getBottom() - 2.0f - h, 3.0f, h));
     }
 
@@ -295,7 +295,7 @@ void PatternGrid::paint (Graphics& g)
         const float x = xForTick (std::fmod (playhead, (double) jmax (1, length)));
         g.setColour (Colours::white.withAlpha (0.85f));
         g.drawVerticalLine ((int) x, gridArea.getY(), gridArea.getBottom());
-        g.setColour (VirusColours::blue.withAlpha (0.25f));
+        g.setColour (VirusColours::accent.withAlpha (0.25f));
         g.fillRect (Rectangle<float> (x - 2.0f, gridArea.getY(), 4.0f, gridArea.getHeight()));
     }
 
@@ -309,21 +309,21 @@ void PatternGrid::paint (Graphics& g)
     if (drag == Drag::Marquee)
     {
         const auto r = Rectangle<float> (marqueeStart, marqueeEnd);
-        g.setColour (VirusColours::blue.withAlpha (0.18f));
+        g.setColour (VirusColours::accent.withAlpha (0.18f));
         g.fillRect (r);
-        g.setColour (VirusColours::blue);
+        g.setColour (VirusColours::accent);
         g.drawRect (r, 1.0f);
     }
     if (hasKeyboardFocus (false))
     {
-        g.setColour (VirusColours::blue.withAlpha (0.7f));
+        g.setColour (VirusColours::accent.withAlpha (0.7f));
         g.drawRoundedRectangle (gridArea.expanded (2.0f), 3.0f, 1.5f);
     }
     if (dropHighlight)
     {
-        g.setColour (VirusColours::blue.withAlpha (0.25f));
+        g.setColour (VirusColours::accent.withAlpha (0.25f));
         g.fillRect (gridArea);
-        g.setColour (VirusColours::blue);
+        g.setColour (VirusColours::accent);
         g.drawRect (gridArea, 2.0f);
         g.setFont (CustomLookAndFeel::uiFont (14.0f, true));
         g.setColour (Colours::white);

@@ -52,7 +52,7 @@ LibraryPanel::LibraryPanel (MelodyMagicProcessor& p) : proc (p)
     searchBox.setTextToShowWhenEmpty ("Search...", VirusColours::labelText.withAlpha (0.6f));
     searchBox.setColour (TextEditor::backgroundColourId, VirusColours::insetTop);
     searchBox.setColour (TextEditor::outlineColourId, VirusColours::bevelDark);
-    searchBox.setColour (TextEditor::focusedOutlineColourId, VirusColours::blue.withAlpha (0.6f));
+    searchBox.setColour (TextEditor::focusedOutlineColourId, VirusColours::accent.withAlpha (0.6f));
     searchBox.setColour (TextEditor::textColourId, Colours::white);
     searchBox.setFont (CustomLookAndFeel::uiFont (12.0f));
     searchBox.onTextChange = [this] { rebuildFiles(); };
@@ -373,14 +373,14 @@ void LibraryPanel::FolderModel::paintListBoxItem (int row, Graphics& g, int w, i
         return;
     if (selected)
     {
-        g.setColour (Colour (0xff2a6fb8));
+        g.setColour (VirusColours::accentButtonBottom);
         g.fillRect (0, 0, w, h);
     }
     auto text = owner.folders[(size_t) row];
     if (text != "All")
         text = shortFolder (text);   // "Phrases/kick101/Bass" -> "Bass"
     g.setFont (CustomLookAndFeel::uiFont (12.0f, row == 0));
-    g.setColour (selected ? Colours::white : Colour (0xffdfe3e6));
+    g.setColour (selected ? Colours::white : VirusColours::buttonText);
     g.drawFittedText (text, 6, 0, w - 8, h, Justification::centredLeft, 1, 0.8f);
 }
 
@@ -404,11 +404,11 @@ void LibraryPanel::FileModel::paintListBoxItem (int row, Graphics& g, int w, int
     const bool loaded = key == owner.currentKey();
     if (selected)
     {
-        g.setColour (Colour (0xff2a6fb8).withAlpha (0.8f));
+        g.setColour (VirusColours::accentButtonBottom.withAlpha (0.8f));
         g.fillRect (0, 0, w, h);
     }
     g.setFont (CustomLookAndFeel::uiFont (12.0f, loaded));
-    g.setColour (loaded && ! selected ? VirusColours::blue : Colour (0xffe8ebee));
+    g.setColour (loaded && ! selected ? VirusColours::accent : VirusColours::popupText);
     g.drawFittedText (lastPart (key), 6, 0, w / 2, h, Justification::centredLeft, 1, 0.8f);
 
     if (owner.selectedFolder == "All" || owner.searchBox.getText().isNotEmpty())
