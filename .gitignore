@@ -16,3 +16,4 @@ nora_*_library.json
 
 __pycache__/
 *.pyc
+release/
